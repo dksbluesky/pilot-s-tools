@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Final Precision</title>
+    <title>Pocket METAR Pro - Real-time Precision Build</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; }
@@ -16,18 +16,13 @@
         .tab-content.active { display: block; }
         .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
         .label-sm { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; font-weight: bold; }
-        
-        /* UI Clone Style */
         .rwy-id { font-size: 3.5rem; font-weight: 900; line-height: 1; letter-spacing: -2px; }
         .v-line { width: 2px; height: 50px; background: #475569; }
-        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; }
-
-        /* Compass */
+        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
         .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
-        .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; }
-        
+        .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; transition: transform 0.8s ease; }
         #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #111; border: 1px solid #444; }
         select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; }
         .side-toggle { display: flex; gap: 8px; margin-top: 10px; }
@@ -45,29 +40,29 @@
 
     <div id="tab1" class="tab-content active">
         <div class="card"><span class="label-sm">ICAO 機場選擇</span><select id="apSelect" onchange="update()"></select></div>
-        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">Loading...</div></div>
+        <div class="card">
+            <span class="label-sm">原始電碼 RAW DATA (Real-time)</span>
+            <div id="rawView" class="raw-text">正在連接 NOAA 伺服器...</div>
+        </div>
         <div class="card">
             <span class="label-sm">預估跑道 EST. RUNWAY</span>
             <div style="display:flex; align-items:center; gap:20px; margin-top:8px;">
                 <div id="estRwy" class="rwy-id">--</div>
                 <div class="v-line"></div>
-                <div style="font-size:0.9rem">
+                <div style="font-size: 0.9rem">
                     <div>頂風 Head: <span id="hWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
                     <div>側風 Cross: <span id="cWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
                 </div>
             </div>
         </div>
-        <div class="card"><span class="label-sm">MAP (100% PARALLEL ALIGNMENT)</span><div id="map"></div></div>
-        <button onclick="transfer()" style="width:100%; padding:18px; background:var(--accent); color:#000; border:none; border-radius:12px; font-weight:bold; cursor:pointer;">傳送計算 ➔</button>
+        <div id="map"></div>
+        <button onclick="transfer()" style="width:100%; padding:18px; background:var(--accent); color:#000; border:none; border-radius:12px; font-weight:bold; cursor:pointer; margin-top:12px;">傳送計算 ➔</button>
     </div>
 
     <div id="tab2" class="tab-content">
         <div class="card">
             <select id="tab2Rwy" onchange="refreshTab2()" style="margin-bottom:10px"></select>
-            <div class="side-toggle">
-                <button id="bL" class="active" onclick="setSide('L')">LEFT Traffic</button>
-                <button id="bR" onclick="setSide('R')">RIGHT Traffic</button>
-            </div>
+            <div class="side-toggle"><button id="bL" class="active" onclick="setSide('L')">LEFT Traffic</button><button id="bR" onclick="setSide('R')">RIGHT Traffic</button></div>
         </div>
         <div class="card" style="text-align:center">
             <div class="compass-wrap">
@@ -82,7 +77,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 數據分流：mag用於計算，true用於地圖繪圖
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -118,26 +112,71 @@ const groups = [
 
 let map, marker, patternOverlay, currentData = null, trafficSide = 'L';
 
+async function update() {
+    const id = document.getElementById('apSelect').value;
+    const ap = airportDB[id];
+    document.getElementById('rawView').innerText = `正在抓取 ${id} 即時 METAR...`;
+    
+    try {
+        // 使用 allorigins 代理 NOAA 資料以解決 CORS 問題
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://aviationweather.gov/api/data/metar?ids=${id}`)}`;
+        const response = await fetch(proxyUrl);
+        const json = await response.json();
+        const raw = json.contents || "";
+        
+        if(!raw.trim()) throw new Error("無回傳內容");
+        document.getElementById('rawView').innerText = raw;
+        
+        const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
+        const dir = windMatch ? parseInt(windMatch[1]) : 0;
+        const spd = windMatch ? parseInt(windMatch[2]) : 0;
+        
+        let best = "", minD = 180;
+        for(let r in ap.rwys) {
+            let diff = Math.abs(dir - ap.rwys[r].mag);
+            if(diff > 180) diff = 360 - diff;
+            if(diff < minD) { minD = diff; best = r; }
+        }
+        
+        const rad = (minD * Math.PI) / 180;
+        currentData = { id, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
+        
+        document.getElementById('estRwy').innerText = best;
+        document.getElementById('hWind').innerText = currentData.hw;
+        document.getElementById('cWind').innerText = currentData.cw;
+        
+        map.setView([ap.lat, ap.lon], 14);
+        marker.setLatLng([ap.lat, ap.lon]);
+        drawMapPattern(id, best);
+    } catch (e) {
+        document.getElementById('rawView').innerText = `無法抓取即時資料: ${e.message}\n請檢查網路連接。`;
+    }
+}
+
 function init() {
-    // 確保清空與重新初始化
     const sel = document.getElementById('apSelect');
-    sel.innerHTML = "";
     groups.forEach(g => {
         let grp = document.createElement('optgroup'); grp.label = g.label;
         g.ids.forEach(id => grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)));
         sel.appendChild(grp);
     });
-    sel.add(new Option("📝 手動輸入 (Manual Input)...", "MANUAL"));
-
-    // 初始化地圖
-    if(map) { map.remove(); }
+    sel.value = "RCSS";
     map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
     patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
-    
     drawCompassUI();
-    update(); // 初始化執行第一次更新
+    update();
+}
+
+function drawMapPattern(id, rwy) {
+    const ap = airportDB[id], s = trafficSide === 'L' ? -1 : 1;
+    const trueHdg = ap.rwys[rwy].true;
+    const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
+    const toRad = Math.PI / 180, rH = (90 - trueHdg) * toRad, rS = (90 - (trueHdg + 90 * s)) * toRad;
+    const move = (p, ang, dist) => [p[0] + Math.sin(ang) * dist * latF, p[1] + Math.cos(ang) * dist * lonF];
+    const p1 = move([ap.lat, ap.lon], rH, 1.5), p2 = move([ap.lat, ap.lon], rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
+    patternOverlay.setLatLngs([p1, p2, p3, p4, p1]);
 }
 
 function drawCompassUI() {
@@ -150,36 +189,6 @@ function drawCompassUI() {
         if(i % 90 === 0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${lbls[i]}</text>`;
     }
     svg.innerHTML = h;
-}
-
-function update() {
-    const id = document.getElementById('apSelect').value; if(id === "MANUAL") return;
-    const ap = airportDB[id];
-    const raw = `${id} 010630Z 10009KT 9999 FEW010 BKN022 BKN035 17/14 Q1018 NOSIG RMK A3006`;
-    document.getElementById('rawView').innerText = raw;
-    const wMatch = raw.match(/(\d{3})(\d{2,3})KT/), dir = parseInt(wMatch[1]), spd = parseInt(wMatch[2]);
-    let best = "", minD = 180;
-    for(let r in ap.rwys) {
-        let diff = Math.abs(dir - ap.rwys[r].mag); if(diff > 180) diff = 360 - diff;
-        if(diff < minD) { minD = diff; best = r; }
-    }
-    const rad = (minD * Math.PI) / 180;
-    currentData = { id, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
-    document.getElementById('estRwy').innerText = best;
-    document.getElementById('hWind').innerText = currentData.hw;
-    document.getElementById('cWind').innerText = currentData.cw;
-    map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
-    drawMapPattern(id, best);
-}
-
-function drawMapPattern(id, rwy) {
-    const ap = airportDB[id], s = trafficSide === 'L' ? -1 : 1;
-    const trueHdg = ap.rwys[rwy].true;
-    const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
-    const toRad = Math.PI / 180, rH = (90 - trueHdg) * toRad, rS = (90 - (trueHdg + 90 * s)) * toRad;
-    const move = (p, ang, dist) => [p[0] + Math.sin(ang) * dist * latF, p[1] + Math.cos(ang) * dist * lonF];
-    const p1 = move([ap.lat, ap.lon], rH, 1.5), p2 = move([ap.lat, ap.lon], rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
-    patternOverlay.setLatLngs([p1, p2, p3, p4, p1]);
 }
 
 function transfer() {
@@ -207,8 +216,6 @@ function refreshTab2() {
 
 function setSide(s) { trafficSide = s; document.getElementById('bL').className = s === 'L' ? 'active' : ''; document.getElementById('bR').className = s === 'R' ? 'active' : ''; refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
-
-// 初始化入口
 window.onload = init;
 </script>
 </body>
