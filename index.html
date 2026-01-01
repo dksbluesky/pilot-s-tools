@@ -3,161 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dennis @ TNN Pilot EFB</title>
+    <title>Pocket METAR Pro - Integrated</title>
     <style>
-        :root { --primary: #004e92; --accent: #00c6ff; --danger: #e74c3c; --success: #2ecc71; --dark: #2c3e50; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; color: #333; }
-        .container { max-width: 800px; margin: auto; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
-        .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 25px; border-radius: 12px; text-align: center; margin-bottom: 20px; }
-        h1 { margin: 0; font-size: 1.5rem; letter-spacing: 1px; }
+        :root {
+            --bg-color: #0b1426;
+            --card-bg: #162235;
+            --accent-blue: #3b82f6;
+            --vfr-green: #22c55e;
+            --text-main: #ffffff;
+            --text-dim: #94a3b8;
+            --highlight: #f59e0b;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column; height: 100vh;
+        }
+
+        /* Tab 導航列 */
+        .tab-bar {
+            display: flex; background: #111d2f; border-bottom: 1px solid #1e293b;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .tab-btn {
+            flex: 1; padding: 15px; border: none; background: none; color: var(--text-dim);
+            font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem;
+        }
+        .tab-btn.active { color: var(--text-main); border-bottom: 3px solid var(--accent-blue); background: #1e293b; }
+
+        /* 內容區 */
+        .content-area { flex: 1; overflow-y: auto; padding: 15px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 卡片樣式 (仿附圖) */
+        .card {
+            background: var(--card-bg); border-radius: 16px; padding: 20px;
+            margin-bottom: 15px; border: 1px solid #1e293b;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .vfr-badge { background: var(--vfr-green); color: black; padding: 2px 10px; border-radius: 20px; font-weight: 800; font-size: 0.8rem; }
         
-        /* 表單樣式 */
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
-        label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; color: var(--dark); }
-        input, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
-        textarea { font-family: monospace; }
-        .btn { background: var(--primary); color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1.1rem; cursor: pointer; margin-top: 15px; }
-        
-        /* 結果區塊 */
-        .section-title { border-left: 5px solid var(--primary); padding-left: 10px; margin: 20px 0 15px; color: var(--primary); }
-        .metar-box { background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.9rem; line-height: 1.5; margin-bottom: 15px; }
-        
-        /* 側風與航線表格 */
-        .display-flex { display: flex; flex-wrap: wrap; gap: 15px; }
-        .data-box { flex: 1; min-width: 200px; background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
-        .val { font-size: 1.5rem; font-weight: 800; color: var(--primary); }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: center; }
-        th { background: #eee; font-size: 0.8rem; }
-        .hdg-cell { font-weight: bold; color: #e67e22; font-size: 1.1rem; }
-        
-        .footer-hint { background: #fff5e6; border-left: 4px solid #f39c12; padding: 12px; font-size: 0.85rem; margin-top: 15px; }
+        /* 數值格線 */
+        .val-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .val-box { background: #0f172a; padding: 15px; border-radius: 12px; text-align: center; }
+        .val-label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 5px; display: block; }
+        .val-num { font-size: 1.5rem; font-weight: bold; }
+
+        /* 輸入與按鈕 */
+        input, textarea {
+            width: 100%; background: #0f172a; border: 1px solid #1e293b; color: white;
+            padding: 12px; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;
+        }
+        .primary-btn {
+            background: var(--accent-blue); color: white; border: none; padding: 15px;
+            width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; margin-top: 5px;
+        }
+        .sync-btn {
+            background: #475569; color: white; border: none; padding: 8px;
+            border-radius: 6px; font-size: 0.8rem; cursor: pointer; margin-top: 10px;
+        }
+
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #1e293b; }
+        th { font-size: 0.7rem; color: var(--text-dim); }
+        .hdg-text { color: var(--highlight); font-weight: bold; font-size: 1.1rem; }
+
+        .metar-raw { font-family: monospace; color: #cbd5e1; line-height: 1.4; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <h1>Pilot Integrated Dashboard</h1>
-        <p>Dennis @ TNN 飛行專業工具箱</p>
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('metar-tab')">📊 METAR 觀測</button>
+        <button class="tab-btn" onclick="switchTab('pattern-tab')">🧭 航線計算</button>
     </div>
 
-    <div class="card">
-        <label>1. 輸入 METAR 原始文本</label>
-        <textarea id="metarInput" rows="3">RCTP 311200Z 04015KT 9999 FEW015 20/15 Q1013 NOSIG RMK A2992</textarea>
-        
-        <div class="grid" style="margin-top:15px;">
-            <div class="input-group">
-                <label>2. 落地跑道 (RWY)</label>
-                <input type="number" id="rwy" value="05" placeholder="例如 05">
-            </div>
-            <div class="input-group">
-                <label>3. 巡航/航線空速 (TAS)</label>
-                <input type="number" id="tas" value="90">
-            </div>
-        </div>
-        <button class="btn" onclick="calculateAll()">執行全面計算</button>
-    </div>
-
-    <div id="results" style="display:none;">
-        <div class="card">
-            <h3 class="section-title">METAR 智慧解碼</h3>
-            <div id="metarText" class="metar-box"></div>
-        </div>
-
-        <div class="card">
-            <h3 class="section-title">跑道風力分量 (Runway Components)</h3>
-            <div class="display-flex">
-                <div class="data-box">
-                    <label>逆風 (Headwind)</label>
-                    <div id="hwVal" class="val">--</div>
+    <div class="content-area">
+        <div id="metar-tab" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2 id="airport-id" style="margin:0">RCNN - 台南 Tainan</h2>
+                    <span class="vfr-badge">VFR</span>
                 </div>
-                <div class="data-box">
-                    <label>側風 (Crosswind)</label>
-                    <div id="xwVal" class="val">--</div>
+                <textarea id="metarInput" rows="3">RCNN 010330Z 36011KT 9999 FEW012 SCT080 25/15 Q1015 NOSIG RMK A2999</textarea>
+                <button class="primary-btn" onclick="parseMETAR()">解析 METAR</button>
+                <button class="sync-btn" onclick="syncToPattern()">➡️ 傳送到航線計算 (Tab 2)</button>
+            </div>
+
+            <div class="val-grid">
+                <div class="val-box">
+                    <span class="val-label">🌬 風速 WIND</span>
+                    <div class="val-num" id="wind-val">360° / 11 KT</div>
+                </div>
+                <div class="val-box">
+                    <span class="val-label">👁 能見度 VIS</span>
+                    <div class="val-num">10km+</div>
+                </div>
+                <div class="val-box">
+                    <span class="val-label">🌡 氣溫 TEMP</span>
+                    <div class="val-num" id="temp-val">25°C</div>
+                </div>
+                <div class="val-box">
+                    <span class="val-label">⏲ 氣壓 QNH</span>
+                    <div class="val-num" id="qnh-val">1015</div>
                 </div>
             </div>
+
+            <div class="card" style="margin-top:20px;">
+                <span class="val-label">📖 電碼解釋 DECODER</span>
+                <div id="decoder-text" style="font-size: 0.9rem; margin-top:10px;">
+                    NOSIG: 無顯著變化<br>RMK: 備註開始
+                </div>
+            </div>
         </div>
 
-        <div class="card">
-            <h3 class="section-title">五邊航線修正建議 (25° Bank)</h3>
-            <table>
-                <thead>
-                    <tr><th>航段 (Leg)</th><th>航跡 (TRK)</th><th>標題 (HDG)</th></tr>
-                </thead>
-                <tbody id="patternBody"></tbody>
-            </table>
-            <div id="physicsNote" class="footer-hint"></div>
+        <div id="pattern-tab" class="tab-content">
+            <div class="card">
+                <h3 style="margin-top:0">航線參數設定</h3>
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1">
+                        <label class="val-label">落地跑道 (RWY)</label>
+                        <input type="number" id="pattern-rwy" value="36">
+                    </div>
+                    <div style="flex:1">
+                        <label class="val-label">航線空速 (TAS)</label>
+                        <input type="number" id="pattern-tas" value="90">
+                    </div>
+                </div>
+                <button class="primary-btn" onclick="calcPattern()">全面計算航線修正</button>
+            </div>
+
+            <div class="card">
+                <span class="val-label">🧭 五邊修正建議 (25° Bank)</span>
+                <table>
+                    <thead>
+                        <tr><th>航段</th><th>TRK</th><th>HDG</th></tr>
+                    </thead>
+                    <tbody id="pattern-table">
+                        <tr><td colspan="3" style="color:#64748b;">請先從 Tab 1 傳送資料或手動輸入</td></tr>
+                    </tbody>
+                </table>
+                <div id="pattern-note" style="margin-top:15px; font-size:0.85rem; color:var(--highlight);"></div>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-function calculateAll() {
-    const raw = document.getElementById('metarInput').value;
-    const rwyNum = parseFloat(document.getElementById('rwy').value);
-    const rwyHdg = rwyNum * 10;
-    const tas = parseFloat(document.getElementById('tas').value);
-    const bank = 25;
+    <script>
+        // 分頁切換邏輯
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
 
-    // --- 1. METAR 解析 ---
-    let explanation = [];
-    const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
-    let wd = 0, ws = 0;
-    if(windMatch) {
-        wd = parseInt(windMatch[1]);
-        ws = parseInt(windMatch[2]);
-        explanation.push(`>> 風向: ${wd}° / 風速: ${ws} KT`);
-    }
-    if(raw.includes('+RA')) explanation.push(">> 警告: [ +RA ] 目前正遭遇強降雨");
-    else if(raw.includes('-RA')) explanation.push(">> 提醒: [ -RA ] 目前為輕微降雨");
-    if(raw.includes('TS')) explanation.push(">> 危險: [ TS ] 偵測到雷雨活動");
-    const rmkA = raw.match(/A(\d{4})/);
-    if(rmkA) explanation.push(`>> 氣壓設定: ${rmkA[1].substring(0,2)}.${rmkA[1].substring(2,4)} inHg`);
-    document.getElementById('metarText').innerText = explanation.join('\n');
+        // 解析 METAR
+        function parseMETAR() {
+            const raw = document.getElementById('metarInput').value;
+            const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
+            if(windMatch) {
+                document.getElementById('wind-val').innerText = `${windMatch[1]}° / ${windMatch[2]} KT`;
+            }
+            const tempMatch = raw.match(/(\d{2})\/(\d{2})/);
+            if(tempMatch) document.getElementById('temp-val').innerText = `${tempMatch[1]}°C`;
+            alert("METAR 解析完成");
+        }
 
-    // --- 2. 側風分量計算 (Wind Components) ---
-    const diff = (wd - rwyHdg) * Math.PI / 180;
-    const headwind = ws * Math.cos(diff);
-    const crosswind = Math.abs(ws * Math.sin(diff));
-    
-    document.getElementById('hwVal').innerText = Math.round(headwind) + " KT";
-    document.getElementById('xwVal').innerText = Math.round(crosswind) + " KT";
-    document.getElementById('xwVal').style.color = crosswind > 15 ? '#e74c3c' : '#2ecc71';
+        // 一鍵複製/傳送至 Tab 2
+        function syncToPattern() {
+            const raw = document.getElementById('metarInput').value;
+            // 簡單提取機場預設跑道 (例如 36)
+            const windMatch = raw.match(/(\d{3})\d{2,3}KT/);
+            if(windMatch) {
+                // 自動帶入最接近風向的跑道 (示意)
+                document.getElementById('pattern-rwy').value = Math.round(windMatch[1]/10);
+            }
+            switchTab('pattern-tab');
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.querySelectorAll('.tab-btn')[0].classList.remove('active');
+            calcPattern();
+        }
 
-    // --- 3. 五邊航線計算 ---
-    const legs = [
-        { n: "一邊 (Upwind)", t: rwyHdg },
-        { n: "二邊 (Cross)", t: (rwyHdg - 90 + 360) % 360 },
-        { n: "三邊 (Downwind)", t: (rwyHdg - 180 + 360) % 360 },
-        { n: "四邊 (Base)", t: (rwyHdg - 270 + 360) % 360 },
-        { n: "五邊 (Final)", t: rwyHdg }
-    ];
+        // 航線修正計算
+        function calcPattern() {
+            const raw = document.getElementById('metarInput').value;
+            const rwy = parseFloat(document.getElementById('pattern-rwy').value) * 10;
+            const tas = parseFloat(document.getElementById('pattern-tas').value);
+            const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
+            
+            if(!windMatch) { alert("請檢查 Tab 1 的 METAR 風力格式"); return; }
+            const wd = parseInt(windMatch[1]);
+            const ws = parseInt(windMatch[2]);
 
-    let html = "";
-    legs.forEach(l => {
-        let alpha = (wd - l.t) * Math.PI / 180;
-        let wca = Math.asin((ws / tas) * Math.sin(alpha)) * 180 / Math.PI;
-        let hdg = (l.t + wca + 360) % 360;
-        html += `<tr><td>${l.n}</td><td>${l.t}°</td><td class="hdg-cell">${Math.round(hdg)}°</td></tr>`;
-    });
-    document.getElementById('patternBody').innerHTML = html;
+            const legs = [
+                { n: "一邊 (Upwind)", t: rwy },
+                { n: "二邊 (Cross)", t: (rwy - 90 + 360) % 360 },
+                { n: "三邊 (Downwind)", t: (rwy - 180 + 360) % 360 },
+                { n: "四邊 (Base)", t: (rwy - 270 + 360) % 360 },
+                { n: "五邊 (Final)", t: rwy }
+            ];
 
-    // --- 4. 物理計算 ---
-    const v_ms = tas * 0.5144;
-    const radius = ((v_ms * v_ms) / (9.8 * Math.tan(bank * Math.PI / 180))) / 1852;
-    document.getElementById('physicsNote').innerHTML = `
-        <strong>👨‍✈️ 教官觀察筆記：</strong><br>
-        • 在 ${tas}KT 下轉彎半徑為 <b>${radius.toFixed(2)} NM</b>。<br>
-        • 建議二邊飛至距離跑道 <b>${(1.2 - radius).toFixed(2)} NM</b> 時壓坡度，轉完剛好對準三邊 1.2 NM。<br>
-        • 側風分量 <b>${Math.round(crosswind)} KT</b>，請注意落地時的蟹形修正。
-    `;
+            let html = "";
+            legs.forEach(l => {
+                let wca = Math.asin((ws/tas) * Math.sin((wd-l.t)*Math.PI/180)) * 180 / Math.PI;
+                html += `<tr><td>${l.n}</td><td>${l.t}°</td><td class="hdg-text">${Math.round((l.t+wca+360)%360)}°</td></tr>`;
+            });
+            document.getElementById('pattern-table').innerHTML = html;
 
-    document.getElementById('results').style.display = 'block';
-}
-</script>
-
+            const radius = (Math.pow(tas*0.5144, 2) / (9.8 * Math.tan(25*Math.PI/180))) / 1852;
+            document.getElementById('pattern-note').innerHTML = `💡 教官提醒：轉彎半徑 ${radius.toFixed(2)} NM。建議在距離跑道中心線 ${(1.2-radius).toFixed(2)} NM 處開始轉彎。`;
+        }
+    </script>
 </body>
 </html>
