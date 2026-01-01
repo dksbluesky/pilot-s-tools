@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Professional Calibration Build</title>
+    <title>Pocket METAR Pro - Instructor Final Build</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; }
@@ -20,7 +20,8 @@
         .v-line { width: 2px; height: 50px; background: #475569; }
         .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; }
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
-        .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; border-radius: 3px; }
+        .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
+        /* 數字防倒置關鍵：inline-block 以便獨立旋轉 */
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; }
         #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #000; border: 1px solid #444; }
@@ -46,7 +47,7 @@
             <div style="display:flex; align-items:center; gap:20px; margin-top:8px;">
                 <div id="estRwy" class="rwy-id">--</div>
                 <div class="v-line"></div>
-                <div style="font-size:0.9rem">
+                <div style="font-size: 0.9rem">
                     <div>Head: <span id="hWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
                     <div>Cross: <span id="cWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
                 </div>
@@ -71,17 +72,17 @@
                 <div id="windPtr" class="wind-ptr"><svg width="24" height="30" viewBox="0 0 24 30" style="position:absolute; top:-125px; left:-12px;"><path d="M12 30 L24 5 L12 12 L0 5 Z" fill="white" /></svg></div>
             </div>
         </div>
-        <div class="card"><table style="width:100%; font-size:0.95rem; border-collapse: collapse;"><tbody id="wcaList"></tbody></table></div>
+        <div class="card"><table style="width:100%; font-size: 0.95rem; border-collapse: collapse;"><tbody id="wcaList"></tbody></table></div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 專家建議：數據分流。rwys 內包含磁方位(mag)與用於地圖繪製的真方位(true)
+// 數據分流：mag 用於計算，true 用於地圖繪圖
 const airportDB = {
-    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48}, "23R": {mag:232, true:228} } },
-    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:96}, "28": {mag:280, true:276} } },
-    "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": {mag:87, true:84}, "27": {mag:267, true:264} } },
+    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.5}, "23R": {mag:232, true:228.5} } },
+    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
+    "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": {mag:87, true:84.2}, "27": {mag:267, true:264.2} } },
     "RCMQ": { name: "台中 Taichung", lat: 24.2582, lon: 120.6203, rwys: { "18": {mag:178, true:174}, "36": {mag:358, true:354} } },
     "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18R": {mag:180, true:176.5}, "36L": {mag:360, true:356.5} } },
     "RCBS": { name: "金門 Kinmen", lat: 24.4297, lon: 118.3586, rwys: { "06": {mag:60, true:56}, "24": {mag:240, true:236} } },
@@ -111,13 +112,14 @@ const groups = [
     { label: "USEU 歐美 US/EU", ids: ["KJFK", "KLAX", "EGLL", "LFPG"] }
 ];
 
-let map, marker, pattern, cur = null, side = 'L';
+let map, marker, patternOverlay, currentData = null, trafficSide = 'L';
 
 function init() {
     map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
-    pattern = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
+    patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
+    
     const sel = document.getElementById('apSelect');
     groups.forEach(g => {
         let grp = document.createElement('optgroup'); grp.label = g.label;
@@ -125,17 +127,18 @@ function init() {
         sel.appendChild(grp);
     });
     sel.add(new Option("📝 手動輸入 (Manual Input)...", "MANUAL"));
-    drawCompass(); update();
+    
+    drawCompassScale(); update();
 }
 
-function drawCompass() {
-    const svg = document.getElementById('compSvg'), labels = { 0:'N', 90:'E', 180:'S', 270:'W' };
+function drawCompassScale() {
+    const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let h = '';
     for(let i=0; i<360; i+=10) {
         let isL = i % 30 === 0, x1 = 100 + Math.sin(i*Math.PI/180) * (isL ? 82 : 88), y1 = 100 - Math.cos(i*Math.PI/180) * (isL ? 82 : 88);
         let x2 = 100 + Math.sin(i*Math.PI/180) * 96, y2 = 100 - Math.cos(i*Math.PI/180) * 96;
         h += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="${isL?2:1}" />`;
-        if(i % 90 === 0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${labels[i]}</text>`;
+        if(i % 90 === 0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${lbls[i]}</text>`;
     }
     svg.innerHTML = h;
 }
@@ -145,56 +148,55 @@ function update() {
     const ap = airportDB[id];
     const raw = `${id} 010500Z 10007KT 050V140 9999 FEW012 SCT025 BKN035 17/14 Q1018 NOSIG RMK A3006`;
     document.getElementById('rawView').innerText = raw;
-    const wind = raw.match(/(\d{3})(\d{2,3})KT/), dir = parseInt(wind[1]), spd = parseInt(wind[2]);
+    const wMatch = raw.match(/(\d{3})(\d{2,3})KT/), dir = parseInt(wMatch[1]), spd = parseInt(wMatch[2]);
     let best = "", minD = 180;
     for(let r in ap.rwys) {
         let diff = Math.abs(dir - ap.rwys[r].mag); if(diff > 180) diff = 360 - diff;
         if(diff < minD) { minD = diff; best = r; }
     }
     const rad = (minD * Math.PI) / 180;
-    cur = { id, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
+    currentData = { id, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
     document.getElementById('estRwy').innerText = best;
-    document.getElementById('hWind').innerText = cur.hw;
-    document.getElementById('cWind').innerText = cur.cw;
+    document.getElementById('hWind').innerText = currentData.hw;
+    document.getElementById('cWind').innerText = currentData.cw;
     map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
-    drawPattern(id, best);
+    drawMapPattern(id, best);
 }
 
-function drawPattern(id, rwy) {
-    const ap = airportDB[id], s = side === 'L' ? -1 : 1;
-    const trueHdg = ap.rwys[rwy].true; // 地圖繪圖使用校準後的真航向
+function drawMapPattern(id, rwy) {
+    const ap = airportDB[id], s = trafficSide === 'L' ? -1 : 1;
+    const trueHdg = ap.rwys[rwy].true;
     const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
     const toRad = Math.PI / 180, rH = (90 - trueHdg) * toRad, rS = (90 - (trueHdg + 90 * s)) * toRad;
     const move = (p, ang, dist) => [p[0] + Math.sin(ang) * dist * latF, p[1] + Math.cos(ang) * dist * lonF];
-    const c = [ap.lat, ap.lon];
-    const p1 = move(c, rH, 1.5), p2 = move(c, rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
-    pattern.setLatLngs([p1, p2, p3, p4, p1]);
+    const p1 = move([ap.lat, ap.lon], rH, 1.5), p2 = move([ap.lat, ap.lon], rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
+    patternOverlay.setLatLngs([p1, p2, p3, p4, p1]);
 }
 
 function transfer() {
     const s = document.getElementById('tab2Rwy'); s.innerHTML = "";
-    for(let r in airportDB[cur.id].rwys) { let o = new Option("RWY " + r, r); if(r === cur.best) o.selected = true; s.add(o); }
+    for(let r in airportDB[currentData.id].rwys) { let o = new Option("RWY " + r, r); if(r === currentData.best) o.selected = true; s.add(o); }
     refreshTab2(); switchTab(2);
 }
 
 function refreshTab2() {
-    const r = document.getElementById('tab2Rwy').value, ap = airportDB[cur.id], magH = ap.rwys[r].mag;
+    const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id], magH = ap.rwys[r].mag;
     const rot = magH - 90;
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
     n1.innerText = r; n2.innerText = (parseInt(r) > 18 ? parseInt(r)-18 : parseInt(r)+18).toString().padStart(2,'0');
     n1.style.transform = `rotate(${-rot}deg)`; n2.style.transform = `rotate(${-rot}deg)`;
-    document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${cur.dir}deg)`;
-    const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(side==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(side==='L'?-1:1)+360)%360}];
+    document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
+    const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(trafficSide==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(trafficSide==='L'?-1:1)+360)%360}];
     let h = ""; legs.forEach(l => {
-        const a = (cur.dir - l.t) * Math.PI / 180, wca = Math.round(Math.asin((cur.spd * Math.sin(a)) / 90) * 180 / Math.PI);
+        const a = (currentData.dir - l.t) * Math.PI / 180, wca = Math.round(Math.asin((currentData.spd * Math.sin(a)) / 90) * 180 / Math.PI);
         h += `<tr style="border-bottom:1px solid #334151"><td style="padding:12px 8px">${l.n}</td><td align="center">${Math.round(l.t)}°</td><td align="center" style="color:var(--red)">${wca>0?'+':''}${wca}°</td><td align="right"><b>${((l.t+wca+360)%360).toString().padStart(3,'0')}°</b></td></tr>`;
     });
     document.getElementById('wcaList').innerHTML = h;
-    drawPattern(cur.id, r);
+    drawMapPattern(currentData.id, r);
 }
 
-function setSide(s) { side = s; document.getElementById('bL').className = s==='L'?'active':''; document.getElementById('bR').className = s==='R'?'active':''; refreshTab2(); }
+function setSide(s) { trafficSide = s; document.getElementById('bL').className = s==='L'?'active':''; document.getElementById('bR').className = s==='R'?'active':''; refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab'+n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n===1) setTimeout(() => map.invalidateSize(), 300); }
 window.onload = init;
 </script>
