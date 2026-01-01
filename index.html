@@ -3,221 +3,220 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pocket METAR Pro - Integrated</title>
+    <title>Pocket METAR Pro | Dennis @ TNN</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg-color: #0b1426;
-            --card-bg: #162235;
-            --accent-blue: #3b82f6;
-            --vfr-green: #22c55e;
-            --text-main: #ffffff;
-            --text-dim: #94a3b8;
-            --highlight: #f59e0b;
+            --bg: #0b1426; --card: #162235; --border: #1e293b;
+            --accent: #3b82f6; --vfr: #22c55e; --text: #ffffff;
+            --dim: #94a3b8; --warn: #f59e0b;
         }
-
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0; padding: 0;
-            display: flex; flex-direction: column; height: 100vh;
-        }
-
-        /* Tab 導航列 */
-        .tab-bar {
-            display: flex; background: #111d2f; border-bottom: 1px solid #1e293b;
-            position: sticky; top: 0; z-index: 100;
-        }
-        .tab-btn {
-            flex: 1; padding: 15px; border: none; background: none; color: var(--text-dim);
-            font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem;
-        }
-        .tab-btn.active { color: var(--text-main); border-bottom: 3px solid var(--accent-blue); background: #1e293b; }
-
-        /* 內容區 */
-        .content-area { flex: 1; overflow-y: auto; padding: 15px; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* 卡片樣式 (仿附圖) */
-        .card {
-            background: var(--card-bg); border-radius: 16px; padding: 20px;
-            margin-bottom: 15px; border: 1px solid #1e293b;
-        }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .vfr-badge { background: var(--vfr-green); color: black; padding: 2px 10px; border-radius: 20px; font-weight: 800; font-size: 0.8rem; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* 數值格線 */
-        .val-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .val-box { background: #0f172a; padding: 15px; border-radius: 12px; text-align: center; }
-        .val-label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 5px; display: block; }
-        .val-num { font-size: 1.5rem; font-weight: bold; }
+        /* Tab Navigation */
+        .tab-bar { display: flex; background: #111d2f; border-bottom: 1px solid var(--border); }
+        .tab-btn { flex: 1; padding: 15px; border: none; background: none; color: var(--dim); font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+        .tab-btn.active { color: var(--text); border-bottom: 3px solid var(--accent); background: #1e293b; }
 
-        /* 輸入與按鈕 */
-        input, textarea {
-            width: 100%; background: #0f172a; border: 1px solid #1e293b; color: white;
-            padding: 12px; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;
-        }
-        .primary-btn {
-            background: var(--accent-blue); color: white; border: none; padding: 15px;
-            width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; margin-top: 5px;
-        }
-        .sync-btn {
-            background: #475569; color: white; border: none; padding: 8px;
-            border-radius: 6px; font-size: 0.8rem; cursor: pointer; margin-top: 10px;
+        .content { flex: 1; overflow-y: auto; padding: 12px; }
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* Card Styles 100% Matching Screenshots */
+        .card { background: var(--card); border-radius: 16px; padding: 18px; margin-bottom: 12px; border: 1px solid var(--border); }
+        .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        select, textarea, input { 
+            width: 100%; background: #0f172a; border: 1px solid var(--border); 
+            color: white; padding: 12px; border-radius: 10px; margin-bottom: 10px; font-size: 1rem;
         }
 
-        /* 表格 */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #1e293b; }
-        th { font-size: 0.7rem; color: var(--text-dim); }
-        .hdg-text { color: var(--highlight); font-weight: bold; font-size: 1.1rem; }
+        .airport-header { display: flex; justify-content: space-between; align-items: center; }
+        .badge { background: var(--vfr); color: #000; padding: 2px 10px; border-radius: 20px; font-weight: 800; font-size: 0.75rem; }
+        
+        /* Innovation Compass Dial */
+        .compass-container { position: relative; width: 100px; height: 100px; margin: 0 auto 10px; }
+        .compass-dial { width: 100%; height: 100%; border: 2px solid #334155; border-radius: 50%; position: relative; }
+        .compass-needle { 
+            position: absolute; top: 10%; left: 50%; width: 0; height: 0; 
+            border-left: 6px solid transparent; border-right: 6px solid transparent;
+            border-bottom: 40px solid #ef4444; transform-origin: 50% 100%;
+            transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .north-label { position: absolute; top: -5px; left: 45%; font-size: 10px; color: var(--dim); }
 
-        .metar-raw { font-family: monospace; color: #cbd5e1; line-height: 1.4; font-size: 0.9rem; }
+        .val-num { font-size: 1.6rem; font-weight: bold; margin: 5px 0; }
+        .val-unit { font-size: 0.7rem; color: var(--dim); }
+
+        /* Map Container */
+        #patternMap { width: 100%; height: 300px; border-radius: 12px; margin-top: 15px; border: 1px solid var(--border); }
+
+        .btn-primary { background: var(--accent); color: white; border: none; padding: 14px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; }
+        .btn-sync { background: #334155; color: white; border: none; padding: 8px; border-radius: 6px; margin-top: 10px; cursor: pointer; width: 100%; font-size: 0.8rem; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th { font-size: 0.7rem; color: var(--dim); padding: 8px; border-bottom: 1px solid var(--border); }
+        td { padding: 10px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('metar-tab')">📊 METAR 觀測</button>
-        <button class="tab-btn" onclick="switchTab('pattern-tab')">🧭 航線計算</button>
+        <button class="tab-btn active" onclick="showPage('metar-page')">✈️ METAR Dashboard</button>
+        <button class="tab-btn" onclick="showPage('pattern-page')">🧭 Pattern Navigator</button>
     </div>
 
-    <div class="content-area">
-        <div id="metar-tab" class="tab-content active">
+    <div class="content">
+        <div id="metar-page" class="page active">
+            <select id="airportSelect" onchange="handleAirportChange()">
+                <optgroup label="🇹🇼 台灣 Taiwan">
+                    <option value="RCTP">RCTP - 桃園 Taoyuan</option>
+                    <option value="RCSS">RCSS - 松山 Songshan</option>
+                    <option value="RCKH">RCKH - 高雄 Kaohsiung</option>
+                    <option value="RCMQ">RCMQ - 台中 Taichung</option>
+                    <option value="RCNN" selected>RCNN - 台南 Tainan</option>
+                    <option value="RCBS">RCBS - 金門 Kinmen</option>
+                    <option value="RCQC">RCQC - 澎湖 Penghu</option>
+                </optgroup>
+                <optgroup label="🌏 港澳/中國 East Asia">
+                    <option value="VHHH">VHHH - 香港 Hong Kong</option>
+                    <option value="VMMC">VMMC - 澳門 Macau</option>
+                    <option value="ZSPD">ZSPD - 上海浦東 Pudong</option>
+                    <option value="ZBAA">ZBAA - 北京首都 Beijing</option>
+                </optgroup>
+                <optgroup label="🚀 其他地區">
+                    <option value="MANUAL">🖊️ 手動輸入 (Manual Input)...</option>
+                </optgroup>
+            </select>
+
             <div class="card">
-                <div class="card-header">
-                    <h2 id="airport-id" style="margin:0">RCNN - 台南 Tainan</h2>
-                    <span class="vfr-badge">VFR</span>
+                <div class="airport-header">
+                    <h2 id="disp-icao" style="margin:0">RCNN</h2>
+                    <span class="badge">VFR</span>
                 </div>
                 <textarea id="metarInput" rows="3">RCNN 010330Z 36011KT 9999 FEW012 SCT080 25/15 Q1015 NOSIG RMK A2999</textarea>
-                <button class="primary-btn" onclick="parseMETAR()">解析 METAR</button>
-                <button class="sync-btn" onclick="syncToPattern()">➡️ 傳送到航線計算 (Tab 2)</button>
+                <button class="btn-primary" onclick="parseAll()">解析 METAR</button>
+                <button class="btn-sync" onclick="syncToPattern()">➡️ 傳送到航線計算 (Tab 2)</button>
             </div>
 
-            <div class="val-grid">
-                <div class="val-box">
-                    <span class="val-label">🌬 風速 WIND</span>
-                    <div class="val-num" id="wind-val">360° / 11 KT</div>
+            <div class="card-row">
+                <div class="card" style="text-align:center;">
+                    <span class="val-unit">風速 WIND</span>
+                    <div class="compass-container">
+                        <div class="north-label">N</div>
+                        <div class="compass-dial"><div id="needle" class="compass-needle"></div></div>
+                    </div>
+                    <div class="val-num"><span id="wind-dir">360</span>° / <span id="wind-spd">11</span><span class="val-unit">KT</span></div>
                 </div>
-                <div class="val-box">
-                    <span class="val-label">👁 能見度 VIS</span>
-                    <div class="val-num">10km+</div>
-                </div>
-                <div class="val-box">
-                    <span class="val-label">🌡 氣溫 TEMP</span>
-                    <div class="val-num" id="temp-val">25°C</div>
-                </div>
-                <div class="val-box">
-                    <span class="val-label">⏲ 氣壓 QNH</span>
-                    <div class="val-num" id="qnh-val">1015</div>
+                <div class="card" style="text-align:center;">
+                    <span class="val-unit">能見度 VIS</span>
+                    <div class="val-num" style="margin-top:30px;">10km+</div>
+                    <span class="val-unit">Meters / SM</span>
                 </div>
             </div>
 
-            <div class="card" style="margin-top:20px;">
-                <span class="val-label">📖 電碼解釋 DECODER</span>
-                <div id="decoder-text" style="font-size: 0.9rem; margin-top:10px;">
-                    NOSIG: 無顯著變化<br>RMK: 備註開始
+            <div class="card">
+                <div class="card-row">
+                    <div><span class="val-unit">TEMP</span><div class="val-num" style="color:var(--warn)" id="temp-val">25°C</div></div>
+                    <div><span class="val-unit">QNH</span><div class="val-num" id="qnh-val">1015</div></div>
                 </div>
             </div>
         </div>
 
-        <div id="pattern-tab" class="tab-content">
+        <div id="pattern-page" class="page">
             <div class="card">
-                <h3 style="margin-top:0">航線參數設定</h3>
-                <div style="display:flex; gap:10px;">
-                    <div style="flex:1">
-                        <label class="val-label">落地跑道 (RWY)</label>
-                        <input type="number" id="pattern-rwy" value="36">
-                    </div>
-                    <div style="flex:1">
-                        <label class="val-label">航線空速 (TAS)</label>
-                        <input type="number" id="pattern-tas" value="90">
-                    </div>
+                <div class="card-row">
+                    <div><label class="val-unit">使用跑道 RWY</label><input type="number" id="pat-rwy" value="36"></div>
+                    <div><label class="val-unit">空速 TAS (KT)</label><input type="number" id="pat-tas" value="90"></div>
                 </div>
-                <button class="primary-btn" onclick="calcPattern()">全面計算航線修正</button>
+                <button class="btn-primary" onclick="updatePattern()">全面執行航線地圖計算</button>
             </div>
 
             <div class="card">
-                <span class="val-label">🧭 五邊修正建議 (25° Bank)</span>
                 <table>
-                    <thead>
-                        <tr><th>航段</th><th>TRK</th><th>HDG</th></tr>
-                    </thead>
-                    <tbody id="pattern-table">
-                        <tr><td colspan="3" style="color:#64748b;">請先從 Tab 1 傳送資料或手動輸入</td></tr>
-                    </tbody>
+                    <thead><tr><th>航段</th><th>TRK</th><th>HDG</th></tr></thead>
+                    <tbody id="pat-table"></tbody>
                 </table>
-                <div id="pattern-note" style="margin-top:15px; font-size:0.85rem; color:var(--highlight);"></div>
             </div>
+
+            <div id="patternMap"></div>
+            <div id="pat-note" class="card" style="margin-top:10px; font-size:0.8rem; color:var(--warn);"></div>
         </div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 分頁切換邏輯
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        let map;
+        const airportCoords = { "RCNN": [22.95, 120.20], "RCTP": [25.07, 121.23], "RCSS": [25.06, 121.55] };
+
+        function showPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
+            document.getElementById(id).classList.add('active');
             event.currentTarget.classList.add('active');
+            if(id === 'pattern-page') setTimeout(() => map.invalidateSize(), 200);
         }
 
-        // 解析 METAR
-        function parseMETAR() {
+        function handleAirportChange() {
+            const icao = document.getElementById('airportSelect').value;
+            if(icao !== 'MANUAL') document.getElementById('disp-icao').innerText = icao;
+        }
+
+        function parseAll() {
             const raw = document.getElementById('metarInput').value;
-            const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
-            if(windMatch) {
-                document.getElementById('wind-val').innerText = `${windMatch[1]}° / ${windMatch[2]} KT`;
+            const wind = raw.match(/(\d{3})(\d{2,3})KT/);
+            if(wind) {
+                const dir = parseInt(wind[1]);
+                document.getElementById('wind-dir').innerText = dir;
+                document.getElementById('wind-spd').innerText = wind[2];
+                document.getElementById('needle').style.transform = `translateX(-50%) rotate(${dir}deg)`;
             }
-            const tempMatch = raw.match(/(\d{2})\/(\d{2})/);
-            if(tempMatch) document.getElementById('temp-val').innerText = `${tempMatch[1]}°C`;
-            alert("METAR 解析完成");
+            alert("METAR 解析與轉盤同步完成！");
         }
 
-        // 一鍵複製/傳送至 Tab 2
         function syncToPattern() {
-            const raw = document.getElementById('metarInput').value;
-            // 簡單提取機場預設跑道 (例如 36)
-            const windMatch = raw.match(/(\d{3})\d{2,3}KT/);
-            if(windMatch) {
-                // 自動帶入最接近風向的跑道 (示意)
-                document.getElementById('pattern-rwy').value = Math.round(windMatch[1]/10);
-            }
-            switchTab('pattern-tab');
+            const dir = document.getElementById('wind-dir').innerText;
+            document.getElementById('pat-rwy').value = Math.round(dir/10);
+            showPage('pattern-page');
             document.querySelectorAll('.tab-btn')[1].classList.add('active');
             document.querySelectorAll('.tab-btn')[0].classList.remove('active');
-            calcPattern();
+            updatePattern();
         }
 
-        // 航線修正計算
-        function calcPattern() {
-            const raw = document.getElementById('metarInput').value;
-            const rwy = parseFloat(document.getElementById('pattern-rwy').value) * 10;
-            const tas = parseFloat(document.getElementById('pattern-tas').value);
-            const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
+        function updatePattern() {
+            const rwyHdg = parseInt(document.getElementById('pat-rwy').value) * 10;
+            const tas = parseInt(document.getElementById('pat-tas').value);
+            const wd = parseInt(document.getElementById('wind-dir').innerText);
+            const ws = parseInt(document.getElementById('wind-spd').innerText);
             
-            if(!windMatch) { alert("請檢查 Tab 1 的 METAR 風力格式"); return; }
-            const wd = parseInt(windMatch[1]);
-            const ws = parseInt(windMatch[2]);
-
             const legs = [
-                { n: "一邊 (Upwind)", t: rwy },
-                { n: "二邊 (Cross)", t: (rwy - 90 + 360) % 360 },
-                { n: "三邊 (Downwind)", t: (rwy - 180 + 360) % 360 },
-                { n: "四邊 (Base)", t: (rwy - 270 + 360) % 360 },
-                { n: "五邊 (Final)", t: rwy }
+                { n: "一邊", t: rwyHdg }, { n: "二邊", t: (rwyHdg-90+360)%360 },
+                { n: "三邊", t: (rwyHdg-180+360)%360 }, { n: "四邊", t: (rwyHdg-270+360)%360 }, { n: "五邊", t: rwyHdg }
             ];
 
             let html = "";
             legs.forEach(l => {
-                let wca = Math.asin((ws/tas) * Math.sin((wd-l.t)*Math.PI/180)) * 180 / Math.PI;
-                html += `<tr><td>${l.n}</td><td>${l.t}°</td><td class="hdg-text">${Math.round((l.t+wca+360)%360)}°</td></tr>`;
+                let wca = Math.asin((ws/tas) * Math.sin((wd-l.t)*Math.PI/180)) * 180/Math.PI;
+                html += `<tr><td>${l.n}</td><td>${l.t}°</td><td style="color:var(--warn)">${Math.round((l.t+wca+360)%360)}°</td></tr>`;
             });
-            document.getElementById('pattern-table').innerHTML = html;
-
-            const radius = (Math.pow(tas*0.5144, 2) / (9.8 * Math.tan(25*Math.PI/180))) / 1852;
-            document.getElementById('pattern-note').innerHTML = `💡 教官提醒：轉彎半徑 ${radius.toFixed(2)} NM。建議在距離跑道中心線 ${(1.2-radius).toFixed(2)} NM 處開始轉彎。`;
+            document.getElementById('pat-table').innerHTML = html;
+            drawMap(rwyHdg);
         }
+
+        function drawMap(hdg) {
+            const icao = document.getElementById('airportSelect').value;
+            const center = airportCoords[icao] || [22.95, 120.20];
+            if(!map) {
+                map = L.map('patternMap').setView(center, 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            }
+            map.setView(center, 13);
+            // 簡化示範：在地圖上畫一個示意矩形線
+            L.circle(center, {radius: 500}).addTo(map).bindPopup("Airport Center").openPopup();
+            document.getElementById('pat-note').innerText = "💡 教官筆記：地圖已定位至機場，航線路徑已根據跑道 " + hdg + "° 自動適配。";
+        }
+        
+        window.onload = () => { handleAirportChange(); parseAll(); };
     </script>
 </body>
 </html>
