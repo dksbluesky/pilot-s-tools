@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pocket METAR Pro - Instructor Final Precision</title>
+    <title>Pocket METAR Pro - Ultimate Integration</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -22,7 +22,7 @@
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; transition: transform 0.8s ease; }
         select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; appearance: none; cursor: pointer; }
-        /* 對稱按鈕修正 */
+        /* LEFT/RIGHT 對稱性按鈕修正 */
         .side-btn { flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; text-align: center; background: #334155; color: #94a3b8; transition: all 0.3s; border: 1px solid transparent; }
         .side-btn.active { background: #f59e0b; color: #000; border: 1px solid #fff; }
     </style>
@@ -36,43 +36,75 @@
     </div>
 
     <div id="tab1" class="tab-content active space-y-4">
-        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold uppercase tracking-widest">Airport Select</span><select id="apSelect" onchange="update()" class="mt-2"></select></div>
         <div class="glass-panel p-4 rounded-xl">
-            <div class="flex justify-between items-start mb-2"><span id="stn-id" class="text-2xl font-black text-white">--</span><span id="flt-cat" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-600">--</span></div>
-            <div id="rawView" class="raw-text">正在同步數據...</div>
-            <div class="text-[10px] text-slate-500 mt-2 text-right">觀測時間: <span id="obs-time">--:--</span></div>
+            <span class="text-[0.7rem] text-slate-400 font-bold tracking-widest uppercase">Airport Select</span>
+            <select id="apSelect" onchange="update()" class="mt-2"></select>
         </div>
+
+        <div class="glass-panel p-4 rounded-xl">
+            <div class="flex justify-between items-start mb-2">
+                <span id="stn-id" class="text-2xl font-black text-white tracking-widest">--</span>
+                <span id="flt-cat" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-600">--</span>
+            </div>
+            <div id="rawView" class="raw-text">正在初始化數據連線...</div>
+            <div class="text-[10px] text-slate-500 mt-2 text-right">UTC 觀測: <span id="obs-time">--:--</span></div>
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
             <div class="glass-panel p-4 rounded-xl flex flex-col items-center">
                 <span class="text-[10px] text-slate-400 self-start font-bold">風速 WIND</span>
                 <div class="mt-1"><span id="w-dir" class="text-lg font-bold">---</span>° / <span id="w-spd" class="text-2xl font-bold text-blue-400">0</span> <span class="text-xs text-slate-500">KT</span></div>
             </div>
-            <div class="glass-panel p-4 rounded-xl flex flex-col items-center text-center">
+            <div class="glass-panel p-4 rounded-xl flex flex-col items-center">
                 <span class="text-[10px] text-slate-400 self-start font-bold">氣壓 QNH</span>
                 <div id="qnhVal" class="text-xl font-bold mt-1">--</div>
                 <div id="qnh-hg" class="text-[10px] text-slate-500">-- inHg</div>
             </div>
         </div>
+
         <div id="map"></div>
-        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="cloud" class="w-3 h-3"></i> Clouds</span><div id="cloudBox" class="mt-2 space-y-1"></div></div>
-        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="book-open" class="w-3 h-3"></i> Decoder</span><div id="visBox" class="mt-2 mb-2 p-2 bg-slate-900/50 rounded flex justify-between text-sm"><span>能見度 Visibility</span><span id="visVal" class="font-bold">--</span></div><div id="decoderBox" class="mt-2 text-sm space-y-1"></div></div>
+
+        <div class="glass-panel p-4 rounded-xl">
+            <span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="cloud" class="w-3 h-3"></i> Clouds</span>
+            <div id="cloudBox" class="mt-2 space-y-1"></div>
+        </div>
+
+        <div class="glass-panel p-4 rounded-xl">
+            <span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="book-open" class="w-3 h-3"></i> Decoder</span>
+            <div id="visBox" class="mt-2 mb-2 p-2 bg-slate-900/50 rounded flex justify-between text-sm">
+                <span>能見度 Visibility</span><span id="visVal" class="font-bold">--</span>
+            </div>
+            <div id="decoderBox" class="mt-2 text-sm space-y-1"></div>
+        </div>
+
         <button onclick="transfer()" class="w-full p-4 bg-orange-500 text-black font-black rounded-xl shadow-lg active:scale-95 transition-all">傳送至計算 ➔</button>
     </div>
 
     <div id="tab2" class="tab-content space-y-4">
-        <div class="glass-panel p-4 rounded-xl"><select id="tab2Rwy" onchange="refreshTab2()"></select><div class="flex gap-2 mt-3 w-full"><button id="bL" class="side-btn active" onclick="setSide('L')">LEFT Traffic</button><button id="bR" class="side-btn" onclick="setSide('R')">RIGHT Traffic</button></div></div>
-        <div class="glass-panel p-6 rounded-xl text-center"><div class="compass-wrap"><svg width="260" height="260" viewBox="0 0 200 200" id="compSvg"></svg><div id="rwyBar" class="rwy-bar"><span id="n1" class="rwy-num">--</span><span id="n2" class="rwy-num">--</span></div><div id="windPtr" class="wind-ptr"><svg width="24" height="30" viewBox="0 0 24 30" style="position:absolute; top:-125px; left:-12px;"><path d="M12 30 L24 5 L12 12 L0 5 Z" fill="white" /></svg></div></div></div>
+        <div class="glass-panel p-4 rounded-xl">
+            <select id="tab2Rwy" onchange="refreshTab2()"></select>
+            <div class="flex gap-2 mt-3 w-full">
+                <button id="bL" class="side-btn active" onclick="setSide('L')">LEFT Traffic</button>
+                <button id="bR" class="side-btn" onclick="setSide('R')">RIGHT Traffic</button>
+            </div>
+        </div>
+        <div class="glass-panel p-6 rounded-xl text-center">
+            <div class="compass-wrap">
+                <svg width="260" height="260" viewBox="0 0 200 200" id="compSvg"></svg>
+                <div id="rwyBar" class="rwy-bar"><span id="n1" class="rwy-num">--</span><span id="n2" class="rwy-num">--</span></div>
+                <div id="windPtr" class="wind-ptr"><svg width="24" height="30" viewBox="0 0 24 30" style="position:absolute; top:-125px; left:-12px;"><path d="M12 30 L24 5 L12 12 L0 5 Z" fill="white" /></svg></div>
+            </div>
+        </div>
         <div class="glass-panel p-4 rounded-xl"><table class="w-full text-sm border-collapse"><tbody id="wcaList"></tbody></table></div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// --- 完全移植 Packet METAR 字典 ---
-const METAR_DICT = { "NOSIG": "未來兩小時天氣無顯著變化", "BECMG": "天氣將逐漸轉變", "TEMPO": "短暫天氣波動", "CAVOK": "能見度10km+ 且 5000ft以下無雲", "NSC": "無顯著雲層", "SKC": "天空無雲", "RMK": "備註開始", "WS": "有風切 Wind Shear", "VC": "Vicinity (機場周邊 8-16km)", "AO1": "自動站(無降水識別)", "AO2": "自動站(有降水識別)" };
-const WEATHER_CODES = { "DZ": "毛毛雨", "RA": "雨", "SN": "雪", "TS": "雷雨", "FG": "霧", "BR": "薄霧", "HZ": "霾", "SH": "陣雨", "FZ": "凍", "MI": "淺", "BC": "散片", "DS": "塵暴", "SQ": "颮" };
+// 完全移植 Packet METAR 字典邏輯
+const METAR_DICT = { "NOSIG": "未來兩小時天氣無顯著變化", "BECMG": "天氣逐漸轉變中", "TEMPO": "短暫天氣波動", "CAVOK": "能見度10km+ 且 5000ft以下無雲", "NSC": "無顯著雲層", "SKC": "天空無雲", "RMK": "備註開始 (Remarks)", "WS": "有風切 (Wind Shear)", "VC": "Vicinity (機場周邊 8-16km)", "AO2": "自動觀測站(有降水識別)" };
+const WEATHER_CODES = { "DZ": "毛毛雨 Drizzle", "RA": "下雨 Rain", "SN": "下雪 Snow", "TS": "雷雨 Thunderstorm", "FG": "霧 Fog", "BR": "薄霧 Mist", "HZ": "霾 Haze", "SH": "陣雨 Showers", "FZ": "凍雨 Freezing", "MI": "淺 Shallow", "BC": "散片 Patches" };
 
-// 教官要求的完整 22 個機場 100% 補完
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L/R": 50, "23L/R": 230 }, trueH: 48.8 },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": 100, "28": 280 }, trueH: 93.5 },
@@ -83,12 +115,12 @@ const airportDB = {
     "RCQC": { name: "澎湖 Penghu", lat: 23.5681, lon: 119.6281, rwys: { "02": 20, "20": 200 }, trueH: 16.5 },
     "VHHH": { name: "香港 Hong Kong", lat: 22.3089, lon: 113.9145, rwys: { "07L/R": 70, "25L/R": 250 }, trueH: 71 },
     "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": 160, "34": 340 }, trueH: 158 },
-    "ZSPD": { name: "上海浦東 Pudong", lat: 31.1433, lon: 121.8052, rwys: { "16/17": 165, "34/35": 345 }, trueH: 152 },
+    "ZSPD": { name: "上海 Pudong", lat: 31.1433, lon: 121.8052, rwys: { "16/17": 165, "34/35": 345 }, trueH: 152 },
     "ZBAA": { name: "北京首都 Beijing", lat: 40.0799, lon: 116.6031, rwys: { "36/01": 360, "18/19": 180 }, trueH: 183 },
-    "RJBB": { name: "大阪關西 Kansai", lat: 34.4347, lon: 135.2441, rwys: { "06L/R": 60, "24L/R": 240 }, trueH: 55 },
+    "RJBB": { name: "大阪 Kansai", lat: 34.4347, lon: 135.2441, rwys: { "06L/R": 60, "24L/R": 240 }, trueH: 55 },
     "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L/R": 340, "16L/R": 160, "22/23": 225 }, trueH: 330 },
     "RJAA": { name: "東京成田 Narita", lat: 35.7647, lon: 140.3863, rwys: { "16L/R": 160, "34L/R": 340 }, trueH: 149 },
-    "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15/16": 155, "33/34": 335 }, trueH: 146 },
+    "RKSI": { name: "首爾 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15/16": 155, "33/34": 335 }, trueH: 146 },
     "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L/C/R": 20, "20L/C/R": 200 }, trueH: 20 },
     "VTBS": { name: "曼谷 Suvarnabhumi", lat: 13.6931, lon: 100.7501, rwys: { "01L/R": 10, "19L/R": 190 }, trueH: 11 },
     "RPLL": { name: "馬尼拉 Manila", lat: 14.5082, lon: 121.0197, rwys: { "06/24": 60, "13/31": 130 }, trueH: 60 },
@@ -98,24 +130,20 @@ const airportDB = {
     "LFPG": { name: "巴黎 CDG", lat: 49.0097, lon: 2.5479, rwys: { "08/09": 85, "26/27": 265 }, trueH: 84 }
 };
 
-const groups = [
-    { label: "🇹🇼 台灣 Taiwan", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] },
-    { label: "🌏 港澳/中國 East Asia", ids: ["VHHH", "VMMC", "ZSPD", "ZBAA"] },
-    { label: "🇯🇵🇰🇷 日本/韓國 Japan/Korea", ids: ["RJBB", "RJTT", "RJAA", "RKSI"] },
-    { label: "🌴 東南亞 SE Asia", ids: ["WSSS", "VTBS", "RPLL"] },
-    { label: "🇺🇸🇪🇺 歐美 US/EU", ids: ["KJFK", "KLAX", "EGLL", "LFPG"] }
-];
+const groups = [{ label: "🇹🇼 台灣 Taiwan", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] }, { label: "🌏 港澳/中國", ids: ["VHHH", "VMMC", "ZSPD", "ZBAA"] }, { label: "🇯🇵🇰🇷 日韓", ids: ["RJBB", "RJTT", "RJAA", "RKSI"] }, { label: "🌴 東南亞", ids: ["WSSS", "VTBS", "RPLL"] }, { label: "🇺🇸🇪🇺 歐美", ids: ["KJFK", "KLAX", "EGLL", "LFPG"] }];
 
 let map, marker, patternLine, currentData = null, trafficSide = 'L';
 
 async function update() {
     const id = document.getElementById('apSelect').value, ap = airportDB[id];
-    if(!ap) return; // 安全檢查鎖
-
-    document.getElementById('rawView').innerText = `連線至 VATSIM 抓取 ${id}...`;
+    if(!ap) return;
+    document.getElementById('rawView').innerText = `正在連線 ${id}...`;
     try {
-        const resp = await fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`);
-        const raw = (await resp.text()).trim();
+        // 使用 allorigins 代理跳板徹底解決 CORS 連線失敗問題
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent('https://metar.vatsim.net/metar.php?id='+id+'&t='+Date.now())}`;
+        const resp = await fetch(proxyUrl);
+        const json = await resp.json();
+        const raw = json.contents.trim();
         if(!raw) throw new Error();
 
         document.getElementById('rawView').innerText = raw;
@@ -141,25 +169,20 @@ async function update() {
         const visM = raw.match(/\b\d{4}\b/);
         document.getElementById('visVal').innerText = visM ? (visM[0]==="9999"?"10km+":visM[0]+"m") : "N/A";
         const qM = raw.match(/Q(\d{4})/);
-        document.getElementById('qnhVal').innerText = qM ? qM[1]+" hPa" : "1013";
+        document.getElementById('qnhVal').innerText = qM ? qM[1]+" hPa" : "1013 hPa";
         if(qM) document.getElementById('qnh-hg').innerText = (parseInt(qM[1])*0.02953).toFixed(2) + " inHg";
 
-        // 強大解碼器：移植 Packet METAR 強度偵測邏輯
+        // 強大解碼器：支持強度與 SLP 換算
         const tokens = raw.split(" ");
         tokens.forEach(t => {
-            let clean = t.replace(/^RE/, ""), intensity = "";
-            if(clean.startsWith("+")) { intensity = "強 (Heavy) "; clean = clean.substring(1); }
-            else if(clean.startsWith("-")) { intensity = "弱 (Light) "; clean = clean.substring(1); }
-            for(let code in WEATHER_CODES) if(clean.includes(code)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${t}</b><span class="text-blue-300">${intensity}${WEATHER_CODES[code]}</span></div>`;
+            let cl = t.replace(/^RE/, ""), intensity = "";
+            if(cl.startsWith("+")) { intensity = "強 (Heavy) "; cl = cl.substring(1); }
+            else if(cl.startsWith("-")) { intensity = "弱 (Light) "; cl = cl.substring(1); }
+            for(let cd in WEATHER_CODES) if(cl.includes(cd)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${t}</b><span class="text-blue-300">${intensity}${WEATHER_CODES[cd]}</span></div>`;
         });
         for(let k in METAR_DICT) if(raw.includes(k)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${k}</b><span class="text-slate-400">${METAR_DICT[k]}</span></div>`;
-        
-        // SLP 氣壓解碼移植
         const slpM = raw.match(/SLP(\d{3})/);
-        if(slpM) {
-            let v = parseInt(slpM[1]);
-            dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>SLP${slpM[1]}</b><span class="text-slate-400">海平面氣壓 ${v<500?'10':'9'}${v/10} hPa</span></div>`;
-        }
+        if(slpM) { let v = parseInt(slpM[1]); dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>SLP${slpM[1]}</b><span class="text-slate-400">海平面氣壓 ${v<500?'10':'9'}${v/10} hPa</span></div>`; }
         document.getElementById('decoderBox').innerHTML = dHtml || "無特殊電碼";
 
         const badge = document.getElementById('flt-cat');
@@ -176,7 +199,7 @@ async function update() {
         document.getElementById('estRwy').innerText = best;
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         drawPattern(id, best);
-    } catch(e) { document.getElementById('rawView').innerText = "連線失敗，請稍後再試。"; }
+    } catch(e) { document.getElementById('rawView').innerText = "連線異常，請檢查網路或更換機場。"; }
 }
 
 function drawPattern(id, rwy) {
@@ -203,8 +226,7 @@ function init() {
     patternLine = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
     const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let h = ''; for(let i=0; i<360; i+=10) {
-        let isL = i%30===0, x1=100+Math.sin(i*Math.PI/180)*(isL?82:88), y1=100-Math.cos(i*Math.PI/180)*(isL?82:88);
-        let x2=100+Math.sin(i*Math.PI/180)*96, y2=100-Math.cos(i*Math.PI/180)*96;
+        let isL = i%30===0, x1=100+Math.sin(i*Math.PI/180)*(isL?82:88), y1=100-Math.cos(i*Math.PI/180)*(isL?82:88), x2=100+Math.sin(i*Math.PI/180)*96, y2=100-Math.cos(i*Math.PI/180)*96;
         h += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="${isL?2:1}" />`;
         if(i%90===0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${lbls[i]}</text>`;
     }
@@ -219,8 +241,7 @@ function transfer() {
 }
 
 function refreshTab2() {
-    const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id], magH = ap.rwys[r];
-    const rot = magH - 90;
+    const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id], magH = ap.rwys[r], rot = magH - 90;
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
     n1.innerText = r.split('/')[0]; n2.innerText = (parseInt(n1.innerText)>18?parseInt(n1.innerText)-18:parseInt(n1.innerText)+18).toString().padStart(2,'0');
