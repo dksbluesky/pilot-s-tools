@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Professional Calibration Build</title>
+    <title>Pocket METAR Pro - Instructor Final Precision</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; }
@@ -16,14 +16,19 @@
         .tab-content.active { display: block; }
         .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
         .label-sm { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; font-weight: bold; }
+        
+        /* UI Clone Style */
         .rwy-id { font-size: 3.5rem; font-weight: 900; line-height: 1; letter-spacing: -2px; }
         .v-line { width: 2px; height: 50px; background: #475569; }
         .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; }
+
+        /* Compass */
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
-        .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; border-radius: 3px; }
+        .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; }
-        #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #000; border: 1px solid #444; }
+        
+        #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #111; border: 1px solid #444; }
         select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; }
         .side-toggle { display: flex; gap: 8px; margin-top: 10px; }
         .side-toggle button { flex: 1; padding: 12px; border: none; border-radius: 8px; background: #334155; color: white; font-weight: bold; cursor: pointer; }
@@ -47,8 +52,8 @@
                 <div id="estRwy" class="rwy-id">--</div>
                 <div class="v-line"></div>
                 <div style="font-size:0.9rem">
-                    <div>Head: <span id="hWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
-                    <div>Cross: <span id="cWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
+                    <div>頂風 Head: <span id="hWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
+                    <div>側風 Cross: <span id="cWind" style="color:var(--green); font-weight:bold">0</span> KT</div>
                 </div>
             </div>
         </div>
@@ -77,9 +82,10 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// 數據分流：mag用於計算，true用於地圖繪圖
 const airportDB = {
-    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.5}, "23R": {mag:232, true:228.5} } },
-    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:96}, "28": {mag:280, true:276} } },
+    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "23R": {mag:232, true:228.8} } },
+    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
     "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": {mag:87, true:84.2}, "27": {mag:267, true:264.2} } },
     "RCMQ": { name: "台中 Taichung", lat: 24.2582, lon: 120.6203, rwys: { "18": {mag:178, true:174}, "36": {mag:358, true:354} } },
     "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18R": {mag:180, true:176.5}, "36L": {mag:360, true:356.5} } },
@@ -113,28 +119,35 @@ const groups = [
 let map, marker, patternOverlay, currentData = null, trafficSide = 'L';
 
 function init() {
-    map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    marker = L.marker([25.0697, 121.5525]).addTo(map);
-    patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
+    // 確保清空與重新初始化
     const sel = document.getElementById('apSelect');
+    sel.innerHTML = "";
     groups.forEach(g => {
         let grp = document.createElement('optgroup'); grp.label = g.label;
         g.ids.forEach(id => grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)));
         sel.appendChild(grp);
     });
     sel.add(new Option("📝 手動輸入 (Manual Input)...", "MANUAL"));
-    drawCompassTicks(); update();
+
+    // 初始化地圖
+    if(map) { map.remove(); }
+    map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    marker = L.marker([25.0697, 121.5525]).addTo(map);
+    patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
+    
+    drawCompassUI();
+    update(); // 初始化執行第一次更新
 }
 
-function drawCompassTicks() {
-    const svg = document.getElementById('compSvg'), labels = { 0:'N', 90:'E', 180:'S', 270:'W' };
+function drawCompassUI() {
+    const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let h = '';
     for(let i=0; i<360; i+=10) {
         let isL = i % 30 === 0, x1 = 100 + Math.sin(i*Math.PI/180) * (isL ? 82 : 88), y1 = 100 - Math.cos(i*Math.PI/180) * (isL ? 82 : 88);
         let x2 = 100 + Math.sin(i*Math.PI/180) * 96, y2 = 100 - Math.cos(i*Math.PI/180) * 96;
         h += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="${isL?2:1}" />`;
-        if(i % 90 === 0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${labels[i]}</text>`;
+        if(i % 90 === 0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${lbls[i]}</text>`;
     }
     svg.innerHTML = h;
 }
@@ -142,7 +155,6 @@ function drawCompassTicks() {
 function update() {
     const id = document.getElementById('apSelect').value; if(id === "MANUAL") return;
     const ap = airportDB[id];
-    // 修正後的 Raw Data 格式 (完全比照教官範例)
     const raw = `${id} 010630Z 10009KT 9999 FEW010 BKN022 BKN035 17/14 Q1018 NOSIG RMK A3006`;
     document.getElementById('rawView').innerText = raw;
     const wMatch = raw.match(/(\d{3})(\d{2,3})KT/), dir = parseInt(wMatch[1]), spd = parseInt(wMatch[2]);
@@ -195,6 +207,8 @@ function refreshTab2() {
 
 function setSide(s) { trafficSide = s; document.getElementById('bL').className = s === 'L' ? 'active' : ''; document.getElementById('bR').className = s === 'R' ? 'active' : ''; refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
+
+// 初始化入口
 window.onload = init;
 </script>
 </body>
