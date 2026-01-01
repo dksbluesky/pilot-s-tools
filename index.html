@@ -149,13 +149,43 @@ async function update() {
         document.getElementById('qnhVal').innerText = qnhMatch ? qnhMatch[1]+" hPa" : "N/A";
 
         // 3. 雲層解析 (含英呎轉換)
-        const cloudRegex = /(FEW|SCT|BKN|OVC)(\d{3})/g;
-        let cMatch, cloudsHtml = "";
-        while ((cMatch = cloudRegex.exec(raw)) !== null) {
-            cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`;
-        }
-        document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
+       // --- 核心復刻：依照教官指定範本修改 Decoder (絕不卡死) ---
+        let dText = "";
+        
+        // 1. 術語解譯
+        dText += raw.includes("NOSIG") ? "NOSIG (未來兩小時天氣無顯著變化)\n" : "";
+        dText += raw.includes("BECMG") ? "BECMG (逐漸轉變中)\n" : "";
+        dText += raw.includes("TEMPO") ? "TEMPO (短暫天氣波動)\n" : "";
+        dText += raw.includes("CAVOK") ? "CAVOK (能見度10km+ 且 5000ft以下無雲)\n" : "";
+        dText += raw.includes("NSC") ? "NSC (無顯著雲層)\n" : "";
+        dText += raw.includes("SKC") ? "SKC (天空無雲)\n" : "";
+        dText += raw.includes("RMK") ? "RMK (備註開始)\n" : "";
+        dText += raw.includes("WS") ? "WS (有風切 Wind Shear)\n" : "";
+        dText += raw.includes("VC") ? "VC (機場周邊 Vicinity)\n" : "";
+        dText += raw.includes("NSW") ? "NSW (無顯著天氣現象)\n" : "";
 
+        // 2. 天氣現象解譯
+        dText += raw.includes("DZ") ? "DZ (毛毛雨)\n" : "";
+        dText += raw.includes("RA") ? "RA (下雨)\n" : "";
+        dText += raw.includes("SN") ? "SN (雪)\n" : "";
+        dText += raw.includes("TS") ? "TS (雷雨)\n" : "";
+        dText += raw.includes("FG") ? "FG (霧)\n" : "";
+        dText += raw.includes("BR") ? "BR (薄霧)\n" : "";
+        dText += raw.includes("HZ") ? "HZ (霾)\n" : "";
+        dText += raw.includes("SH") ? "SH (陣雨)\n" : "";
+        dText += raw.includes("FZ") ? "FZ (凍)\n" : "";
+        dText += raw.includes("BC") ? "BC (散片)\n" : "";
+
+        // 3. 特殊海壓解算 (保留 Regex 確保精確度)
+        const slpMatch = raw.match(/SLP(\d{3})/);
+        if(slpMatch) {
+            let v = parseInt(slpMatch[1]);
+            let slpReal = v < 500 ? `10${v/10}` : `9${v/10}`;
+            dText += `SLP${slpMatch[1]} (海平面氣壓 ${slpReal} hPa)\n`;
+        }
+
+        // 將結果寫入您代碼中的 rmkBox
+        document.getElementById('rmkBox').innerText = dText || "無特殊天氣現象";
         // 4. 【核心修復】Packet METAR 搜尋解碼邏輯 (絕不卡住)
         let decHtml = "";
         const tokens = raw.split(' '); // 把電碼切開
