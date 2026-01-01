@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pocket METAR Pro - Instructor Final Build</title>
+    <title>Pocket METAR Pro - Instructor Final Precision</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -64,8 +64,7 @@
         </div>
 
         <div class="glass-panel p-4 rounded-xl">
-            <span class="text-[0.7rem] text-slate-400 font-bold uppercase">預估跑道 Est. Runway</span>
-            <div class="flex items-center gap-4 mt-2">
+            <div class="flex items-center gap-4">
                 <div id="estRwy" class="text-4xl font-black text-white">--</div>
                 <div class="v-line"></div>
                 <div class="text-xs">
@@ -90,7 +89,7 @@
             <div id="decoderBox" class="space-y-1 text-sm"></div>
         </div>
 
-        <button onclick="transfer()" class="w-full p-4 bg-orange-500 hover:bg-orange-600 text-black font-black rounded-xl shadow-lg">傳送至計算 ➔</button>
+        <button onclick="transfer()" class="w-full p-4 bg-orange-500 hover:bg-orange-600 text-black font-black rounded-xl shadow-lg transition-all active:scale-95">傳送至計算 ➔</button>
     </div>
 
     <div id="tab2" class="tab-content space-y-4">
@@ -114,7 +113,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 完整補完 22 個機場，絕不因為找不到 Key 而崩潰
+// 完整補完所有教官要求的 22 個機場
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L/R": 50, "23L/R": 230 }, trueH: 48.8 },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": 100, "28": 280 }, trueH: 93.5 },
@@ -128,7 +127,7 @@ const airportDB = {
     "ZSPD": { name: "上海浦東 Pudong", lat: 31.1433, lon: 121.8052, rwys: { "16/17": 165, "34/35": 345 }, trueH: 152 },
     "ZBAA": { name: "北京首都 Beijing", lat: 40.0799, lon: 116.6031, rwys: { "36/01": 360, "18/19": 180 }, trueH: 183 },
     "RJBB": { name: "大阪關西 Kansai", lat: 34.4347, lon: 135.2441, rwys: { "06L/R": 60, "24L/R": 240 }, trueH: 55 },
-    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "16L/R": 160, "34L/R": 340, "22/23": 225 }, trueH: 330 },
+    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L/R": 340, "16L/R": 160, "22/23": 225 }, trueH: 330 },
     "RJAA": { name: "東京成田 Narita", lat: 35.7647, lon: 140.3863, rwys: { "16L/R": 160, "34L/R": 340 }, trueH: 149 },
     "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15/16": 155, "33/34": 335 }, trueH: 146 },
     "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L/C/R": 20, "20L/C/R": 200 }, trueH: 20 },
@@ -156,9 +155,9 @@ let map, marker, pattern, currentData = null, trafficSide = 'L';
 async function update() {
     const id = document.getElementById('apSelect').value;
     const ap = airportDB[id];
-    if(!ap) return; // 安全檢查
+    if(!ap) return;
 
-    document.getElementById('rawView').innerText = `正在連線至 VATSIM 抓取 ${id}...`;
+    document.getElementById('rawView').innerText = `正在抓取 ${id}...`;
 
     try {
         const resp = await fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`);
@@ -178,9 +177,9 @@ async function update() {
         document.getElementById('wind-spd').innerText = spd;
 
         let cHtml = "", dHtml = "";
-        const cloudRegex = /(FEW|SCT|BKN|OVC)(\d{3})/g; let cm;
+        const cloudRegex = /(FEW|SCT|BKN|OVC|VV)(\d{3})/g; let cm;
         while((cm = cloudRegex.exec(raw))) cHtml += `<div class="cloud-row"><b>${cm[1]}</b><span>${parseInt(cm[2])*100} ft</span></div>`;
-        document.getElementById('cloudBox').innerHTML = cHtml || "Sky Clear / NSC";
+        document.getElementById('cloudBox').innerHTML = cHtml || "<div class='text-slate-500 italic'>Sky Clear</div>";
 
         const visM = raw.match(/\b\d{4}\b/);
         document.getElementById('visVal').innerText = visM ? (visM[0]==="9999"?"10km+":visM[0]+"m") : "N/A";
@@ -193,7 +192,7 @@ async function update() {
         document.getElementById('decoderBox').innerHTML = dHtml || "無特殊電碼";
 
         const badge = document.getElementById('flight-category');
-        if(raw.includes("CAVOK") || !cHtml.includes("BKN")) { badge.innerText="VFR"; badge.className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-black"; }
+        if(raw.includes("CAVOK") || (!cHtml.includes("BKN") && !cHtml.includes("OVC"))) { badge.innerText="VFR"; badge.className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-black"; }
         else { badge.innerText="MVFR"; badge.className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500 text-white"; }
 
         let best = "", maxH = -99;
@@ -209,7 +208,7 @@ async function update() {
 
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         drawPattern(id, best);
-    } catch(e) { document.getElementById('rawView').innerText = "連線失敗，請檢查網路。"; }
+    } catch(e) { document.getElementById('rawView').innerText = "連線失敗。"; }
 }
 
 function drawPattern(id, rwy) {
