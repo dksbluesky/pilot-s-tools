@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pocket METAR Pro - Ultimate Instructor Edition</title>
+    <title>Pocket METAR Pro - Instructor Final Build</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -56,10 +56,10 @@
                     <span id="wind-spd" class="text-2xl font-bold text-blue-400">0</span> <span class="text-xs text-slate-500">KT</span>
                 </div>
             </div>
-            <div class="glass-panel p-4 rounded-xl">
-                <span class="text-[10px] text-slate-400 font-bold">氣壓 QNH</span>
-                <div id="qnhVal" class="text-xl font-bold text-center mt-1">--</div>
-                <div id="qnh-hg" class="text-[10px] text-slate-500 text-center">-- inHg</div>
+            <div class="glass-panel p-4 rounded-xl text-center">
+                <span class="text-[10px] text-slate-400 font-bold self-start">氣壓 QNH</span>
+                <div id="qnhVal" class="text-xl font-bold mt-1">--</div>
+                <div id="qnh-hg" class="text-[10px] text-slate-500">-- inHg</div>
             </div>
         </div>
 
@@ -114,7 +114,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 補完所有 22 個機場資料，確保絕不崩潰
+// 完整補完 22 個機場，絕不因為找不到 Key 而崩潰
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L/R": 50, "23L/R": 230 }, trueH: 48.8 },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": 100, "28": 280 }, trueH: 93.5 },
@@ -148,17 +148,19 @@ const groups = [
     { label: "🇺🇸🇪🇺 歐美 US/EU", ids: ["KJFK", "KLAX", "EGLL", "LFPG"] }
 ];
 
-const DICT = { "NOSIG": "未來兩小時天氣無顯著變化", "CAVOK": "能見度10km+ 且 5000ft以下無雲", "WS": "有風切 Wind Shear", "TS": "雷雨 Thunderstorm", "RA": "有雨 Rain", "FG": "霧 Fog", "HZ": "霾 Haze", "RMK": "備註開始 Remarks" };
+const DICT = { "NOSIG": "未來兩小時天氣無顯著變化", "CAVOK": "能見度10km+ 且 5000ft以下無雲", "WS": "有風切 Wind Shear", "RMK": "備註開始 Remarks" };
+const CODES = { "RA": "Rain (雨)", "DZ": "Drizzle (毛毛雨)", "TS": "Thunderstorm (雷雨)", "FG": "Fog (霧)", "HZ": "Haze (霾)", "BR": "Mist (薄霧)" };
 
 let map, marker, pattern, currentData = null, trafficSide = 'L';
 
 async function update() {
     const id = document.getElementById('apSelect').value;
     const ap = airportDB[id];
-    document.getElementById('rawView').innerText = `正在抓取 ${id} 資料...`;
+    if(!ap) return; // 安全檢查
+
+    document.getElementById('rawView').innerText = `正在連線至 VATSIM 抓取 ${id}...`;
 
     try {
-        // 完全沿用 Packet METAR 的穩定抓取網址
         const resp = await fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`);
         const raw = (await resp.text()).trim();
         if(!raw) throw new Error("No data");
@@ -166,35 +168,34 @@ async function update() {
         document.getElementById('rawView').innerText = raw;
         document.getElementById('station-id').innerText = id;
 
-        // 解析風向
+        const timeM = raw.match(/\d{6}Z/);
+        document.getElementById('obs-time').innerText = timeM ? timeM[0] + " UTC" : "--:--";
+
         const wM = raw.match(/(\d{3}|VRB)(\d{2,3})KT/);
         const dir = wM ? (wM[1]==='VRB'?0:parseInt(wM[1])) : 0;
         const spd = wM ? parseInt(wM[2]) : 0;
         document.getElementById('wind-dir').innerText = wM ? wM[1] : "---";
         document.getElementById('wind-spd').innerText = spd;
 
-        // 解析雲層
-        const cloudRegex = /(FEW|SCT|BKN|OVC)(\d{3})/g; let cm, cHtml = "";
+        let cHtml = "", dHtml = "";
+        const cloudRegex = /(FEW|SCT|BKN|OVC)(\d{3})/g; let cm;
         while((cm = cloudRegex.exec(raw))) cHtml += `<div class="cloud-row"><b>${cm[1]}</b><span>${parseInt(cm[2])*100} ft</span></div>`;
         document.getElementById('cloudBox').innerHTML = cHtml || "Sky Clear / NSC";
 
-        // 解析能見度/氣壓
         const visM = raw.match(/\b\d{4}\b/);
         document.getElementById('visVal').innerText = visM ? (visM[0]==="9999"?"10km+":visM[0]+"m") : "N/A";
         const qM = raw.match(/Q(\d{4})/);
         document.getElementById('qnhVal').innerText = qM ? qM[1]+" hPa" : "1013 hPa";
         if(qM) document.getElementById('qnh-hg').innerText = (parseInt(qM[1])*0.02953).toFixed(2) + " inHg";
 
-        // 解譯器
-        let dHtml = ""; for(let k in DICT) if(raw.includes(k)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${k}</b><span class="text-slate-400">${DICT[k]}</span></div>`;
+        for(let k in DICT) if(raw.includes(k)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${k}</b><span class="text-slate-400">${DICT[k]}</span></div>`;
+        for(let k in CODES) if(raw.includes(k)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2 text-blue-300"><b>${k}</b><span>${CODES[k]}</span></div>`;
         document.getElementById('decoderBox').innerHTML = dHtml || "無特殊電碼";
 
-        // VFR/IFR
         const badge = document.getElementById('flight-category');
         if(raw.includes("CAVOK") || !cHtml.includes("BKN")) { badge.innerText="VFR"; badge.className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-black"; }
         else { badge.innerText="MVFR"; badge.className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500 text-white"; }
 
-        // 預估跑道
         let best = "", maxH = -99;
         for(let r in ap.rwys) {
             let diff = Math.abs(dir - ap.rwys[r]); if(diff > 180) diff = 360 - diff;
@@ -213,7 +214,6 @@ async function update() {
 
 function drawPattern(id, rwy) {
     const ap = airportDB[id], s = trafficSide==='L'?-1:1;
-    // 100% 平行核心：使用 True Heading 繪圖
     const baseH = ap.trueH + (rwy.includes('28') || rwy.includes('23') || rwy.includes('18') || rwy.includes('19') ? 180 : 0);
     const latF = 1/60, lonF = latF/Math.cos(ap.lat*Math.PI/180), toR = Math.PI/180;
     const rH = (90-baseH)*toR, rS = (90-(baseH+90*s))*toR;
@@ -225,8 +225,10 @@ function drawPattern(id, rwy) {
 function init() {
     const sel = document.getElementById('apSelect');
     groups.forEach(g => {
-        let gr = document.createElement('optgroup'); gr.label = g.label;
-        g.ids.forEach(id => gr.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)));
+        let grp = document.createElement('optgroup'); grp.label = g.label;
+        g.ids.forEach(id => {
+            if(airportDB[id]) grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id));
+        });
         sel.appendChild(grp);
     });
     sel.value = "RCSS";
@@ -235,7 +237,6 @@ function init() {
     marker = L.marker([25.0697, 121.5525]).addTo(map);
     pattern = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
     
-    // 繪製羅盤刻度
     const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let h = ''; for(let i=0; i<360; i+=10) {
         let isL = i%30===0, x1=100+Math.sin(i*Math.PI/180)*(isL?82:88), y1=100-Math.cos(i*Math.PI/180)*(isL?82:88);
@@ -248,6 +249,7 @@ function init() {
 
 function transfer() {
     const s = document.getElementById('tab2Rwy'); s.innerHTML = "";
+    if(!currentData) return;
     for(let r in airportDB[currentData.id].rwys) { let o = new Option("RWY " + r, r); if(r === currentData.best) o.selected = true; s.add(o); }
     refreshTab2(); switchTab(2);
 }
@@ -258,10 +260,8 @@ function refreshTab2() {
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
     n1.innerText = r.split('/')[0]; n2.innerText = (parseInt(n1.innerText)>18?parseInt(n1.innerText)-18:parseInt(n1.innerText)+18).toString().padStart(2,'0');
-    // 數字防倒置
     n1.style.transform = `rotate(${-rot}deg)`; n2.style.transform = `rotate(${-rot}deg)`;
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
-    
     const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(trafficSide==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(trafficSide==='L'?-1:1)+360)%360}];
     let h = ""; legs.forEach(l => {
         const a = (currentData.dir - l.t) * Math.PI / 180, wca = Math.round(Math.asin((currentData.spd * Math.sin(a)) / 90) * 180 / Math.PI);
@@ -270,8 +270,8 @@ function refreshTab2() {
     document.getElementById('wcaList').innerHTML = h; drawPattern(currentData.id, r);
 }
 
-function setSide(s) { trafficSide = s; document.getElementById('bL').classList.toggle('bg-orange-500', s==='L'); document.getElementById('bR').classList.toggle('bg-orange-500', s==='R'); refreshTab2(); }
-function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab'+n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n===1) setTimeout(() => map.invalidateSize(), 300); }
+function setSide(s) { trafficSide = s; document.getElementById('bL').classList.toggle('bg-orange-500', s==='L'); document.getElementById('bL').classList.toggle('text-black', s==='L'); document.getElementById('bR').classList.toggle('bg-orange-500', s==='R'); document.getElementById('bR').classList.toggle('text-black', s==='R'); if(currentData) refreshTab2(); }
+function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab'+n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n===1 && map) setTimeout(() => map.invalidateSize(), 300); }
 window.onload = init;
 </script>
 </body>
