@@ -3,27 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pocket METAR Pro - Instructor Final Build</title>
+    <title>Pocket METAR Pro - Professional Integration</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --green: #4ade80; }
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --green: #4ade80; --red: #fb7185; }
         body { background-color: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .tab-btn { flex: 1; padding: 14px; background: #334155; border: none; color: white; border-radius: 8px 8px 0 0; opacity: 0.6; font-weight: bold; }
         .tab-btn.active { background: var(--card); border-bottom: 3px solid var(--accent); opacity: 1; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.85rem; background: #000; padding: 12px; border-radius: 8px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; background: #000; padding: 12px; border-radius: 8px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+        #map { height: 280px; border-radius: 12px; background: #111; border: 1px solid #444; margin: 10px 0; }
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
         .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; transition: transform 0.8s ease; }
-        #map { height: 280px; border-radius: 12px; background: #111; border: 1px solid #444; margin: 10px 0; }
-        select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; appearance: none; }
-        /* 側邊切換按鈕修正 */
-        .side-btn { flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; text-align: center; transition: all 0.3s; background: #334155; color: #94a3b8; border: 1px solid transparent; }
+        select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; appearance: none; cursor: pointer; }
+        .side-btn { flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; text-align: center; background: #334155; color: #94a3b8; border: 1px solid transparent; transition: all 0.3s; }
         .side-btn.active { background: #f59e0b; color: #000; border: 1px solid #fff; }
     </style>
 </head>
@@ -32,107 +31,136 @@
 <div class="container max-w-md mx-auto space-y-4">
     <div class="flex gap-1">
         <button class="tab-btn active" onclick="switchTab(1)">機場資訊</button>
-        <button class="tab-btn" onclick="switchTab(2)">起降計算</button>
+        <button class="tab-btn" onclick="switchTab(2)">航線計算</button>
     </div>
 
     <div id="tab1" class="tab-content active space-y-4">
-        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold tracking-widest uppercase">Airport Select</span><select id="apSelect" onchange="update()" class="mt-2"></select></div>
+        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold tracking-widest uppercase">Airport Selector</span><select id="apSelect" onchange="update()" class="mt-2"></select></div>
         <div class="glass-panel p-4 rounded-xl">
-            <div class="flex justify-between items-start mb-2"><span id="stn-id" class="text-2xl font-black tracking-widest">--</span><span id="flt-cat" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-600 text-white">--</span></div>
-            <div id="rawView" class="raw-text">正在初始化...</div>
+            <div class="flex justify-between items-start mb-2"><span id="stn-id" class="text-2xl font-black text-white">--</span><span id="flt-cat" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-600">--</span></div>
+            <div id="rawView" class="raw-text">正在同步數據...</div>
+            <div class="text-[10px] text-slate-500 mt-2 text-right">觀測時間: <span id="obs-time">--:--</span></div>
         </div>
         <div class="grid grid-cols-2 gap-3">
-            <div class="glass-panel p-4 rounded-xl"><span class="text-[10px] text-slate-400 font-bold">WIND</span><div class="text-center mt-1"><span id="w-dir" class="text-lg font-bold">---</span>° / <span id="w-spd" class="text-2xl font-bold text-blue-400">0</span> <span class="text-xs text-slate-500">KT</span></div></div>
-            <div class="glass-panel p-4 rounded-xl text-center"><span class="text-[10px] text-slate-400 font-bold self-start">QNH</span><div id="qnhVal" class="text-xl font-bold mt-1">--</div><div id="qnh-hg" class="text-[10px] text-slate-500">-- inHg</div></div>
+            <div class="glass-panel p-4 rounded-xl flex flex-col items-center">
+                <span class="text-[10px] text-slate-400 self-start font-bold">風速 WIND</span>
+                <div class="mt-1"><span id="w-dir" class="text-lg font-bold">---</span>° / <span id="w-spd" class="text-2xl font-bold text-blue-400">0</span> <span class="text-xs text-slate-500">KT</span></div>
+            </div>
+            <div class="glass-panel p-4 rounded-xl flex flex-col items-center">
+                <span class="text-[10px] text-slate-400 self-start font-bold">氣壓 QNH</span>
+                <div id="qnhVal" class="text-xl font-bold mt-1">--</div>
+                <div id="qnh-hg" class="text-[10px] text-slate-500">-- inHg</div>
+            </div>
         </div>
-        <div class="glass-panel p-4 rounded-xl"><div class="flex items-center gap-4"><div id="estRwy" class="text-4xl font-black text-white">--</div><div class="w-[2px] h-10 bg-slate-600"></div><div class="text-xs"><div>頂風 Head: <span id="hWind" class="text-green-400 font-bold">0</span> KT</div><div>側風 Cross: <span id="cWind" class="text-blue-400 font-bold">0</span> KT</div></div></div></div>
         <div id="map"></div>
-        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="book-open" class="w-3 h-3"></i> Decoder</span><div id="decoderBox" class="mt-2 text-sm space-y-1"></div></div>
-        <button onclick="transfer()" class="w-full p-4 bg-orange-500 text-black font-black rounded-xl shadow-lg transition-all active:scale-95">傳送至計算 ➔</button>
+        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="cloud" class="w-3 h-3"></i> Clouds</span><div id="cloudBox" class="mt-2 space-y-1"></div></div>
+        <div class="glass-panel p-4 rounded-xl"><span class="text-[0.7rem] text-slate-400 font-bold flex items-center gap-1 uppercase"><i data-lucide="book-open" class="w-3 h-3"></i> Decoder</span><div id="visBox" class="mt-2 mb-2 p-2 bg-slate-900/50 rounded flex justify-between text-sm"><span>能見度 Visibility</span><span id="visVal" class="font-bold">--</span></div><div id="decoderBox" class="mt-2 space-y-1 text-sm"></div></div>
+        <button onclick="transfer()" class="w-full p-4 bg-orange-500 text-black font-black rounded-xl shadow-lg active:scale-95 transition-all">傳送至計算 ➔</button>
     </div>
 
     <div id="tab2" class="tab-content space-y-4">
-        <div class="glass-panel p-4 rounded-xl">
-            <select id="tab2Rwy" onchange="refreshTab2()"></select>
-            <div class="flex gap-2 mt-3 w-full">
-                <button id="bL" class="side-btn active" onclick="setSide('L')">LEFT Traffic</button>
-                <button id="bR" class="side-btn" onclick="setSide('R')">RIGHT Traffic</button>
-            </div>
-        </div>
-        <div class="glass-panel p-6 rounded-xl text-center">
-            <div class="compass-wrap">
-                <svg width="260" height="260" viewBox="0 0 200 200" id="compSvg"></svg>
-                <div id="rwyBar" class="rwy-bar"><span id="n1" class="rwy-num">--</span><span id="n2" class="rwy-num">--</span></div>
-                <div id="windPtr" class="wind-ptr"><svg width="24" height="30" viewBox="0 0 24 30" style="position:absolute; top:-125px; left:-12px;"><path d="M12 30 L24 5 L12 12 L0 5 Z" fill="white" /></svg></div>
-            </div>
-        </div>
-        <div class="glass-panel p-4 rounded-xl"><table class="w-full text-sm"><tbody id="wcaList"></tbody></table></div>
+        <div class="glass-panel p-4 rounded-xl"><select id="tab2Rwy" onchange="refreshTab2()"></select><div class="flex gap-2 mt-3 w-full"><button id="bL" class="side-btn active" onclick="setSide('L')">LEFT Traffic</button><button id="bR" class="side-btn" onclick="setSide('R')">RIGHT Traffic</button></div></div>
+        <div class="glass-panel p-6 rounded-xl text-center"><div class="compass-wrap"><svg width="260" height="260" viewBox="0 0 200 200" id="compSvg"></svg><div id="rwyBar" class="rwy-bar"><span id="n1" class="rwy-num">--</span><span id="n2" class="rwy-num">--</span></div><div id="windPtr" class="wind-ptr"><svg width="24" height="30" viewBox="0 0 24 30" style="position:absolute; top:-125px; left:-12px;"><path d="M12 30 L24 5 L12 12 L0 5 Z" fill="white" /></svg></div></div></div>
+        <div class="glass-panel p-4 rounded-xl"><table class="w-full text-sm border-collapse"><tbody id="wcaList"></tbody></table></div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 完整 22 個機場資料庫，防止崩潰
+// --- 完全移植 Packet METAR 字典 ---
+const METAR_DICT = { "NOSIG": "No Significant Change (未來兩小時天氣無顯著變化)", "BECMG": "Becoming (天氣將逐漸轉變)", "TEMPO": "Temporary (短暫天氣波動)", "CAVOK": "能見度10km+ 且 5000ft以下無雲", "NSC": "No Significant Clouds (無顯著雲層)", "SKC": "Sky Clear (天空無雲)", "RMK": "Remarks (備註開始)", "WS": "Wind Shear (風切)", "VC": "Vicinity (在機場周邊 8-16km)" };
+const WEATHER_CODES = { "DZ": "毛毛雨 Drizzle", "RA": "雨 Rain", "SN": "雪 Snow", "TS": "雷雨 Thunderstorm", "FG": "霧 Fog", "BR": "薄霧 Mist", "HZ": "霾 Haze", "SH": "陣雨 Showers", "FZ": "凍 Freezing", "MI": "淺 Shallow", "BC": "散片 Patches" };
+
+// 機場資料庫
 const airportDB = {
-    "RCTP": { name: "桃園", lat: 25.0797, lon: 121.2342, rwys: { "05L/R": 50, "23L/R": 230 }, trueH: 48.8 },
-    "RCSS": { name: "松山", lat: 25.0697, lon: 121.5525, rwys: { "10": 100, "28": 280 }, trueH: 93.5 },
-    "RCKH": { name: "高雄", lat: 22.5771, lon: 120.3500, rwys: { "09": 90, "27": 270 }, trueH: 84.2 },
-    "RCMQ": { name: "台中", lat: 24.2582, lon: 120.6203, rwys: { "36": 360, "18": 180 }, trueH: 355 },
-    "RCNN": { name: "台南", lat: 22.9507, lon: 120.2058, rwys: { "18L/R": 180, "36L/R": 360 }, trueH: 176.5 },
-    "RCBS": { name: "金門", lat: 24.4297, lon: 118.3586, rwys: { "06": 60, "24": 240 }, trueH: 56 },
-    "RCQC": { name: "澎湖", lat: 23.5681, lon: 119.6281, rwys: { "02": 20, "20": 200 }, trueH: 16.5 },
-    "VHHH": { name: "香港", lat: 22.3089, lon: 113.9145, rwys: { "07L/R": 70, "25L/R": 250 }, trueH: 71 },
-    "VMMC": { name: "澳門", lat: 22.1495, lon: 113.5915, rwys: { "16": 160, "34": 340 }, trueH: 158 },
-    "ZSPD": { name: "上海", lat: 31.1433, lon: 121.8052, rwys: { "16/17": 165, "34/35": 345 }, trueH: 152 },
-    "ZBAA": { name: "北京", lat: 40.0799, lon: 116.6031, rwys: { "36/01": 360, "18/19": 180 }, trueH: 183 },
-    "RJBB": { name: "大阪", lat: 34.4347, lon: 135.2441, rwys: { "06L/R": 60, "24L/R": 240 }, trueH: 55 },
-    "RJTT": { name: "羽田", lat: 35.5494, lon: 139.7798, rwys: { "34L/R": 340, "16L/R": 160, "22/23": 225 }, trueH: 330 },
-    "RJAA": { name: "成田", lat: 35.7647, lon: 140.3863, rwys: { "16L/R": 160, "34L/R": 340 }, trueH: 149 },
-    "RKSI": { name: "首爾", lat: 37.4602, lon: 126.4407, rwys: { "15/16": 155, "33/34": 335 }, trueH: 146 },
-    "WSSS": { name: "新加坡", lat: 1.3644, lon: 103.9915, rwys: { "02L/C/R": 20, "20L/C/R": 200 }, trueH: 20 },
-    "VTBS": { name: "曼谷", lat: 13.6931, lon: 100.7501, rwys: { "01L/R": 10, "19L/R": 190 }, trueH: 11 },
-    "RPLL": { name: "馬尼拉", lat: 14.5082, lon: 121.0197, rwys: { "06/24": 60, "13/31": 130 }, trueH: 60 },
-    "KJFK": { name: "紐約", lat: 40.6413, lon: -73.7781, rwys: { "04L/R": 40, "22L/R": 220, "13L/R": 130, "31L/R": 310 }, trueH: 57 },
-    "KLAX": { name: "洛杉磯", lat: 33.9416, lon: -118.4085, rwys: { "06/07": 70, "24/25": 250 }, trueH: 58 },
-    "EGLL": { name: "倫敦", lat: 51.4700, lon: -0.4543, rwys: { "09L/R": 90, "27L/R": 270 }, trueH: 89 },
-    "LFPG": { name: "巴黎", lat: 49.0097, lon: 2.5479, rwys: { "08/09": 85, "26/27": 265 }, trueH: 84 }
+    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L/R": 50, "23L/R": 230 }, trueH: 48.8 },
+    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": 100, "28": 280 }, trueH: 93.5 },
+    "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": 90, "27": 270 }, trueH: 84.2 },
+    "RCMQ": { name: "台中 Taichung", lat: 24.2582, lon: 120.6203, rwys: { "36": 360, "18": 180 }, trueH: 355 },
+    "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18L/R": 180, "36L/R": 360 }, trueH: 176.5 },
+    "RCBS": { name: "金門 Kinmen", lat: 24.4297, lon: 118.3586, rwys: { "06": 60, "24": 240 }, trueH: 56 },
+    "RCQC": { name: "澎湖 Penghu", lat: 23.5681, lon: 119.6281, rwys: { "02": 20, "20": 200 }, trueH: 16.5 },
+    "VHHH": { name: "香港 Hong Kong", lat: 22.3089, lon: 113.9145, rwys: { "07L/R": 70, "25L/R": 250 }, trueH: 71 },
+    "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": 160, "34": 340 }, trueH: 158 },
+    "ZSPD": { name: "上海浦東 Pudong", lat: 31.1433, lon: 121.8052, rwys: { "16/17": 165, "34/35": 345 }, trueH: 152 },
+    "ZBAA": { name: "北京首都 Beijing", lat: 40.0799, lon: 116.6031, rwys: { "36/01": 360, "18/19": 180 }, trueH: 183 },
+    "RJBB": { name: "大阪關西 Kansai", lat: 34.4347, lon: 135.2441, rwys: { "06L/R": 60, "24L/R": 240 }, trueH: 55 },
+    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L/R": 340, "16L/R": 160, "22/23": 225 }, trueH: 330 },
+    "RJAA": { name: "東京成田 Narita", lat: 35.7647, lon: 140.3863, rwys: { "16L/R": 160, "34L/R": 340 }, trueH: 149 },
+    "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15/16": 155, "33/34": 335 }, trueH: 146 },
+    "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L/C/R": 20, "20L/C/R": 200 }, trueH: 20 },
+    "VTBS": { name: "曼谷 Suvarnabhumi", lat: 13.6931, lon: 100.7501, rwys: { "01L/R": 10, "19L/R": 190 }, trueH: 11 },
+    "RPLL": { name: "馬尼拉 Manila", lat: 14.5082, lon: 121.0197, rwys: { "06/24": 60, "13/31": 130 }, trueH: 60 },
+    "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L/R": 40, "22L/R": 220, "13L/R": 130, "31L/R": 310 }, trueH: 57 },
+    "KLAX": { name: "洛杉磯 LAX", lat: 33.9416, lon: -118.4085, rwys: { "06/07": 70, "24/25": 250 }, trueH: 58 },
+    "EGLL": { name: "倫敦 Heathrow", lat: 51.4700, lon: -0.4543, rwys: { "09L/R": 90, "27L/R": 270 }, trueH: 89 },
+    "LFPG": { name: "巴黎 CDG", lat: 49.0097, lon: 2.5479, rwys: { "08/09": 85, "26/27": 265 }, trueH: 84 }
 };
 
 const groups = [{ label: "🇹🇼 台灣 Taiwan", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] }, { label: "🌏 港澳/中國", ids: ["VHHH", "VMMC", "ZSPD", "ZBAA"] }, { label: "🇯🇵🇰🇷 日韓", ids: ["RJBB", "RJTT", "RJAA", "RKSI"] }, { label: "🌴 東南亞", ids: ["WSSS", "VTBS", "RPLL"] }, { label: "🇺🇸🇪🇺 歐美", ids: ["KJFK", "KLAX", "EGLL", "LFPG"] }];
 
-const DICT = { "NOSIG": "未來兩小時天氣無顯著變化", "CAVOK": "能見度10km+ 且無雲", "WS": "有風切 Wind Shear", "RMK": "備註開始 Remarks" };
-
 let map, marker, patternLine, currentData = null, trafficSide = 'L';
 
 async function update() {
-    const id = document.getElementById('apSelect').value;
-    const ap = airportDB[id];
+    const id = document.getElementById('apSelect').value, ap = airportDB[id];
     if(!ap) return;
-
-    document.getElementById('rawView').innerText = `正在抓取 ${id}...`;
+    document.getElementById('rawView').innerText = `連線至 VATSIM 抓取 ${id}...`;
     try {
         const resp = await fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`);
         const raw = (await resp.text()).trim();
         if(!raw) throw new Error();
-
         document.getElementById('rawView').innerText = raw;
         document.getElementById('stn-id').innerText = id;
+        const timeM = raw.match(/\d{6}Z/);
+        document.getElementById('obs-time').innerText = timeM ? timeM[0] + " UTC" : "--:--";
 
         const wM = raw.match(/(\d{3}|VRB)(\d{2,3})KT/);
         const dir = wM ? (wM[1]==='VRB'?0:parseInt(wM[1])) : 0, spd = wM ? parseInt(wM[2]) : 0;
         document.getElementById('w-dir').innerText = wM ? wM[1] : "---";
         document.getElementById('w-spd').innerText = spd;
 
+        // 雲層與解碼邏輯完全移植
+        let cHtml = "", dHtml = "", ceiling = 10000;
+        const cloudRegex = /(FEW|SCT|BKN|OVC|VV)(\d{3})/g; let cm;
+        while((cm = cloudRegex.exec(raw))) {
+            const alt = parseInt(cm[2])*100;
+            cHtml += `<div class="bg-slate-800/50 p-2 rounded-lg border-l-4 border-blue-400 flex justify-between"><b>${cm[1]}</b><span>${alt} ft</span></div>`;
+            if((cm[1]==='BKN'||cm[1]==='OVC') && alt < ceiling) ceiling = alt;
+        }
+        document.getElementById('cloudBox').innerHTML = cHtml || "Sky Clear";
+
+        const visM = raw.match(/\b\d{4}\b/);
+        document.getElementById('visVal').innerText = visM ? (visM[0]==="9999"?"10km+":visM[0]+"m") : "N/A";
         const qM = raw.match(/Q(\d{4})/);
-        document.getElementById('qnhVal').innerText = qM ? qM[1]+" hPa" : "1013 hPa";
+        document.getElementById('qnhVal').innerText = qM ? qM[1]+" hPa" : "1013";
         if(qM) document.getElementById('qnh-hg').innerText = (parseInt(qM[1])*0.02953).toFixed(2) + " inHg";
 
-        let dHtml = ""; for(let k in DICT) if(raw.includes(k)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${k}</b><span class="text-slate-400">${DICT[k]}</span></div>`;
+        // --- 強大解碼器：支持強度偵測與組合代碼 ---
+        const tokens = raw.split(" ");
+        tokens.forEach(t => {
+            let clean = t.replace(/^RE/, ""), intensity = "";
+            if(clean.startsWith("+")) { intensity = "強 Heavy"; clean = clean.substring(1); }
+            else if(clean.startsWith("-")) { intensity = "弱 Light"; clean = clean.substring(1); }
+            for(let code in WEATHER_CODES) {
+                if(clean.includes(code)) {
+                    dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${t}</b><span class="text-blue-300">${intensity} ${WEATHER_CODES[code]}</span></div>`;
+                    break;
+                }
+            }
+        });
+        for(let k in METAR_DICT) if(raw.includes(k)) dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>${k}</b><span class="text-slate-400">${METAR_DICT[k]}</span></div>`;
+        
+        // SLK 海平面氣壓解碼邏輯
+        const slpM = raw.match(/SLP(\d{3})/);
+        if(slpM) {
+            let v = parseInt(slpM[1]);
+            dHtml += `<div class="p-1 border-b border-slate-700/50 flex gap-2"><b>SLP${slpM[1]}</b><span class="text-slate-400">海平面氣壓 ${v<500?'10':'9'}${v/10} hPa</span></div>`;
+        }
         document.getElementById('decoderBox').innerHTML = dHtml || "無特殊電碼";
 
         const badge = document.getElementById('flt-cat');
-        badge.innerText = (raw.includes("CAVOK") || !raw.includes("BKN")) ? "VFR" : "MVFR";
-        badge.className = `px-3 py-1 rounded-full text-xs font-bold ${badge.innerText==="VFR"?'bg-green-500 text-black':'bg-blue-500 text-white'}`;
+        badge.innerText = (raw.includes("CAVOK") || ceiling >= 3000) ? "VFR" : (ceiling < 1000 ? "IFR" : "MVFR");
+        badge.className = `px-3 py-1 rounded-full text-xs font-bold ${badge.innerText==="VFR"?'bg-green-500 text-black':(badge.innerText==="IFR"?'bg-red-500':'bg-blue-500')}`;
 
         let best = "", maxH = -99;
         for(let r in ap.rwys) {
@@ -141,10 +169,9 @@ async function update() {
             if(hw > maxH) { maxH = hw; best = r; }
         }
         currentData = { id, dir, spd, best, hw: maxH, cw: Math.round(spd * Math.sin(Math.abs(dir-ap.rwys[best]) * Math.PI / 180)) };
-        document.getElementById('estRwy').innerText = best;
         document.getElementById('hWind').innerText = currentData.hw;
         document.getElementById('cWind').innerText = currentData.cw;
-
+        document.getElementById('estRwy').innerText = best;
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         drawPattern(id, best);
     } catch(e) { document.getElementById('rawView').innerText = "連線失敗。"; }
@@ -163,8 +190,8 @@ function drawPattern(id, rwy) {
 function init() {
     const sel = document.getElementById('apSelect');
     groups.forEach(g => {
-        let grp = document.createElement('optgroup'); grp.label = g.label;
-        g.ids.forEach(id => { if(airportDB[id]) grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)); });
+        let gr = document.createElement('optgroup'); gr.label = g.label;
+        g.ids.forEach(id => { if(airportDB[id]) gr.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)); });
         sel.appendChild(grp);
     });
     sel.value = "RCSS";
@@ -172,7 +199,6 @@ function init() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
     patternLine = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
-    
     const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let h = ''; for(let i=0; i<360; i+=10) {
         let isL = i%30===0, x1=100+Math.sin(i*Math.PI/180)*(isL?82:88), y1=100-Math.cos(i*Math.PI/180)*(isL?82:88);
@@ -196,7 +222,6 @@ function refreshTab2() {
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
     n1.innerText = r.split('/')[0]; n2.innerText = (parseInt(n1.innerText)>18?parseInt(n1.innerText)-18:parseInt(n1.innerText)+18).toString().padStart(2,'0');
-    // 數字防倒置
     n1.style.transform = `rotate(${-rot}deg)`; n2.style.transform = `rotate(${-rot}deg)`;
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
     const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(trafficSide==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(trafficSide==='L'?-1:1)+360)%360}];
@@ -207,12 +232,7 @@ function refreshTab2() {
     document.getElementById('wcaList').innerHTML = h; drawPattern(currentData.id, r);
 }
 
-function setSide(s) { 
-    trafficSide = s; 
-    document.getElementById('bL').classList.toggle('active', s==='L'); 
-    document.getElementById('bR').classList.toggle('active', s==='R'); 
-    if(currentData) refreshTab2(); 
-}
+function setSide(s) { trafficSide = s; document.getElementById('bL').classList.toggle('active', s==='L'); document.getElementById('bR').classList.toggle('active', s==='R'); if(currentData) refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab'+n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n===1 && map) setTimeout(() => map.invalidateSize(), 300); }
 window.onload = init;
 </script>
