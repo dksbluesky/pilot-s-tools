@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pilot Dashboard Pro</title>
+    <style>
+        :root { --primary: #2563eb; --danger: #dc2626; --bg: #f1f5f9; --card: #ffffff; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 15px; }
+        .app-container { max-width: 600px; margin: auto; }
+        .card { background: var(--card); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        h2 { margin-top: 0; color: #1e293b; border-left: 4px solid var(--primary); padding-left: 10px; font-size: 1.25rem; }
+        textarea, input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 12px; }
+        .btn { background: var(--primary); color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; }
+        .btn:active { opacity: 0.8; }
+        .metar-output { background: #0f172a; color: #4ade80; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 14px; white-space: pre-wrap; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: center; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .hdg-val { color: #f59e0b; font-weight: 900; font-size: 1.2rem; }
+        .note { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px; font-size: 0.85rem; color: #92400e; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="card">
+        <h2>✈️ 飛行員綜合看板</h2>
+        <label style="font-size:0.8rem; color:#64748b;">貼上 METAR 文字</label>
+        <textarea id="metarInput" rows="3">RCTP 311200Z 04015KT 9999 FEW015 20/15 Q1013 NOSIG RMK A2992</textarea>
+        
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1">
+                <label style="font-size:0.8rem;">使用跑道 (RWY)</label>
+                <input type="number" id="rwy" value="05">
+            </div>
+            <div style="flex:1">
+                <label style="font-size:0.8rem;">空速 (TAS kt)</label>
+                <input type="number" id="tas" value="90">
+            </div>
+        </div>
+        <button class="btn" onclick="processAviation()">計算航線修正 & 解析</button>
+    </div>
+
+    <div id="results" style="display:none;">
+        <div class="card">
+            <h2>📝 METAR 智慧解析</h2>
+            <div id="metarText" class="metar-output"></div>
+        </div>
+
+        <div class="card">
+            <h2>🧭 五邊航線建議 (25° Bank)</h2>
+            <table>
+                <thead><tr><th>航段</th><th>預定航跡</th><th>修正標題</th></tr></thead>
+                <tbody id="patternBody"></tbody>
+            </table>
+            <div id="radiusNote" class="note"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+function processAviation() {
+    const raw = document.getElementById('metarInput').value;
+    const rwyHdg = parseFloat(document.getElementById('rwy').value) * 10;
+    const tas = parseFloat(document.getElementById('tas').value);
+    
+    // 1. METAR Parsing
+    let info = [];
+    const wind = raw.match(/(\d{3})(\d{2,3})KT/);
+    let wd = 0, ws = 0;
+    if(wind) { wd = parseInt(wind[1]); ws = parseInt(wind[2]); info.push(`🌬 風向: ${wd}° / 風速: ${ws}KT`); }
+    if(raw.includes('+RA')) info.push("⚠️ 智慧解析: [ +RA ] 大雨");
+    else if(raw.includes('-RA')) info.push("🌦 智慧解析: [ -RA ] 小雨");
+    if(raw.includes('TS')) info.push("⚡ 警報: [ TS ] 機場有雷雨活動");
+    const qnh = raw.match(/Q(\d{4})/);
+    if(qnh) info.push(`⏲ 氣壓: ${qnh[1]} hPa`);
+    const rmk = raw.match(/A(\d{4})/);
+    if(rmk) info.push(`🌡 高度表撥定值: ${rmk[1].substring(0,2)}.${rmk[1].substring(2,4)} inHg`);
+
+    document.getElementById('metarText').innerText = info.join('\n');
+
+    // 2. Pattern WCA
+    const legs = [
+        { n: "一邊", t: rwyHdg },
+        { n: "二邊", t: (rwyHdg - 90 + 360) % 360 },
+        { n: "三邊", t: (rwyHdg - 180 + 360) % 360 },
+        { n: "四邊", t: (rwyHdg - 270 + 360) % 360 },
+        { n: "五邊", t: rwyHdg }
+    ];
+    let html = "";
+    legs.forEach(l => {
+        let wca = Math.asin((ws/tas) * Math.sin((wd-l.t)*Math.PI/180)) * 180 / Math.PI;
+        html += `<tr><td>${l.n}</td><td>${l.t}°</td><td class="hdg-val">${Math.round((l.t+wca+360)%360)}°</td></tr>`;
+    });
+    document.getElementById('patternBody').innerHTML = html;
+
+    // 3. Physics
+    const radius = ((Math.pow(tas*0.5144, 2)) / (9.8 * Math.tan(25*Math.PI/180))) / 1852;
+    document.getElementById('radiusNote').innerHTML = `<b>教官筆記：</b><br>轉彎半徑約 <b>${radius.toFixed(2)} NM</b>。在二邊飛至距離跑道 <b>${(1.2-radius).toFixed(2)} NM</b> 時，請壓 25° 坡度轉入三邊。`;
+    
+    document.getElementById('results').style.display = 'block';
+}
+</script>
+</body>
+</html>
