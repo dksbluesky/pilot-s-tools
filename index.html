@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Final Build</title>
+    <title>Pocket METAR Pro - Professional Calibration Build</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; }
@@ -16,23 +16,17 @@
         .tab-content.active { display: block; }
         .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
         .label-sm { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; font-weight: bold; }
-        
-        /* UI: Pocket METAR Style */
         .rwy-id { font-size: 3.5rem; font-weight: 900; line-height: 1; letter-spacing: -2px; }
         .v-line { width: 2px; height: 50px; background: #475569; }
-        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; }
-
-        /* Compass Visuals */
+        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.82rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; }
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
-        .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
-        /* 數字防倒置關鍵樣式 */
+        .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; border-radius: 3px; }
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; }
-        
         #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #000; border: 1px solid #444; }
         select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; }
         .side-toggle { display: flex; gap: 8px; margin-top: 10px; }
-        .side-toggle button { flex: 1; padding: 12px; border-radius: 8px; background: #334155; color: white; font-weight: bold; cursor: pointer; border: none; }
+        .side-toggle button { flex: 1; padding: 12px; border: none; border-radius: 8px; background: #334155; color: white; font-weight: bold; cursor: pointer; }
         .side-toggle button.active { background: #f59e0b; color: #000; }
     </style>
 </head>
@@ -58,7 +52,7 @@
                 </div>
             </div>
         </div>
-        <div class="card"><span class="label-sm">MAP (100% ALIGNMENT)</span><div id="map"></div></div>
+        <div class="card"><span class="label-sm">MAP (100% PARALLEL ALIGNMENT)</span><div id="map"></div></div>
         <button onclick="transfer()" style="width:100%; padding:18px; background:var(--accent); color:#000; border:none; border-radius:12px; font-weight:bold; cursor:pointer;">傳送計算 ➔</button>
     </div>
 
@@ -77,36 +71,36 @@
                 <div id="windPtr" class="wind-ptr"><svg width="24" height="30" viewBox="0 0 24 30" style="position:absolute; top:-125px; left:-12px;"><path d="M12 30 L24 5 L12 12 L0 5 Z" fill="white" /></svg></div>
             </div>
         </div>
-        <div class="card"><table style="width:100%; font-size:0.95rem; border-collapse:collapse;"><tbody id="wcaList"></tbody></table></div>
+        <div class="card"><table style="width:100%; font-size:0.95rem; border-collapse: collapse;"><tbody id="wcaList"></tbody></table></div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 完整機場資料庫與磁偏角校正
+// 專家建議：數據分流。rwys 內包含磁方位(mag)與用於地圖繪製的真方位(true)
 const airportDB = {
-    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": 52.7, "23R": 232.7 }, var: -4.5 },
-    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": 97.5, "28": 277.5 }, var: -4.5 },
-    "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": 86.8, "27": 266.8 }, var: -3.2 },
-    "RCMQ": { name: "台中 Taichung", lat: 24.2582, lon: 120.6203, rwys: { "18": 178, "36": 358 }, var: -4.2 },
-    "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18R": 178, "36L": 358 }, var: -3.5 },
-    "RCBS": { name: "金門 Kinmen", lat: 24.4297, lon: 118.3586, rwys: { "06": 60, "24": 240 }, var: -4.0 },
-    "RCQC": { name: "澎湖 Penghu", lat: 23.5681, lon: 119.6281, rwys: { "02": 20, "20": 200 }, var: -3.5 },
-    "VHHH": { name: "香港 Hong Kong", lat: 22.3089, lon: 113.9145, rwys: { "07L": 73, "25R": 253 }, var: -2.3 },
-    "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": 160, "34": 340 }, var: -2.3 },
-    "ZSPD": { name: "上海浦東 Pudong", lat: 31.1433, lon: 121.8052, rwys: { "16L": 158, "34R": 338 }, var: -6.0 },
-    "ZBAA": { name: "北京首都 Beijing", lat: 40.0799, lon: 116.6031, rwys: { "01": 11, "19": 191 }, var: -8.0 },
-    "RJBB": { name: "大阪關西 Kansai", lat: 34.4347, lon: 135.2441, rwys: { "06L": 62, "24R": 242 }, var: -7.5 },
-    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": 337, "16R": 157 }, var: -7.8 },
-    "RJAA": { name: "東京成田 Narita", lat: 35.7647, lon: 140.3863, rwys: { "16L": 156, "34R": 336 }, var: -7.8 },
-    "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15L": 154, "33R": 334 }, var: -8.5 },
-    "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L": 20, "20R": 200 }, var: 0.2 },
-    "VTBS": { name: "曼谷 Suvarnabhumi", lat: 13.6931, lon: 100.7501, rwys: { "01L": 11, "19R": 191 }, var: -0.5 },
-    "RPLL": { name: "馬尼拉 Manila", lat: 14.5082, lon: 121.0197, rwys: { "06": 61, "24": 241 }, var: -1.0 },
-    "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L": 44, "22R": 224 }, var: -12.5 },
-    "KLAX": { name: "洛杉磯 LAX", lat: 33.9416, lon: -118.4085, rwys: { "06L": 69, "24R": 249 }, var: 11.5 },
-    "EGLL": { name: "倫敦 Heathrow", lat: 51.4700, lon: -0.4543, rwys: { "09L": 90, "27R": 270 }, var: 1.0 },
-    "LFPG": { name: "巴黎 CDG", lat: 49.0097, lon: 2.5479, rwys: { "08L": 86, "26R": 266 }, var: 2.0 }
+    "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48}, "23R": {mag:232, true:228} } },
+    "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:96}, "28": {mag:280, true:276} } },
+    "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": {mag:87, true:84}, "27": {mag:267, true:264} } },
+    "RCMQ": { name: "台中 Taichung", lat: 24.2582, lon: 120.6203, rwys: { "18": {mag:178, true:174}, "36": {mag:358, true:354} } },
+    "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18R": {mag:180, true:176.5}, "36L": {mag:360, true:356.5} } },
+    "RCBS": { name: "金門 Kinmen", lat: 24.4297, lon: 118.3586, rwys: { "06": {mag:60, true:56}, "24": {mag:240, true:236} } },
+    "RCQC": { name: "澎湖 Penghu", lat: 23.5681, lon: 119.6281, rwys: { "02": {mag:20, true:16.5}, "20": {mag:200, true:196.5} } },
+    "VHHH": { name: "香港 Hong Kong", lat: 22.3089, lon: 113.9145, rwys: { "07L": {mag:73, true:71}, "25R": {mag:253, true:251} } },
+    "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": {mag:160, true:158}, "34": {mag:340, true:338} } },
+    "ZSPD": { name: "上海浦東 Pudong", lat: 31.1433, lon: 121.8052, rwys: { "16L": {mag:158, true:152}, "34R": {mag:338, true:332} } },
+    "ZBAA": { name: "北京首都 Beijing", lat: 40.0799, lon: 116.6031, rwys: { "01": {mag:11, true:3}, "19": {mag:191, true:183} } },
+    "RJBB": { name: "大阪關西 Kansai", lat: 34.4347, lon: 135.2441, rwys: { "06L": {mag:62, true:55}, "24R": {mag:242, true:235} } },
+    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": {mag:337, true:330}, "16R": {mag:157, true:150} } },
+    "RJAA": { name: "東京成田 Narita", lat: 35.7647, lon: 140.3863, rwys: { "16L": {mag:156, true:149}, "34R": {mag:336, true:329} } },
+    "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15L": {mag:154, true:146}, "33R": {mag:334, true:326} } },
+    "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L": {mag:20, true:20}, "20R": {mag:200, true:200} } },
+    "VTBS": { name: "曼谷 Suvarnabhumi", lat: 13.6931, lon: 100.7501, rwys: { "01L": {mag:11, true:11}, "19R": {mag:191, true:191} } },
+    "RPLL": { name: "馬尼拉 Manila", lat: 14.5082, lon: 121.0197, rwys: { "06": {mag:61, true:60}, "24": {mag:241, true:240} } },
+    "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L": {mag:44, true:57}, "22R": {mag:224, true:237} } },
+    "KLAX": { name: "洛杉磯 LAX", lat: 33.9416, lon: -118.4085, rwys: { "06L": {mag:69, true:58}, "24R": {mag:249, true:238} } },
+    "EGLL": { name: "倫敦 Heathrow", lat: 51.4700, lon: -0.4543, rwys: { "09L": {mag:90, true:89}, "27R": {mag:270, true:269} } },
+    "LFPG": { name: "巴黎 CDG", lat: 49.0097, lon: 2.5479, rwys: { "08L": {mag:86, true:84}, "26R": {mag:266, true:264} } }
 };
 
 const groups = [
@@ -124,8 +118,6 @@ function init() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
     pattern = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
-    
-    // 初始化下拉選單
     const sel = document.getElementById('apSelect');
     groups.forEach(g => {
         let grp = document.createElement('optgroup'); grp.label = g.label;
@@ -133,11 +125,10 @@ function init() {
         sel.appendChild(grp);
     });
     sel.add(new Option("📝 手動輸入 (Manual Input)...", "MANUAL"));
-    
-    drawCompassTicks(); update();
+    drawCompass(); update();
 }
 
-function drawCompassTicks() {
+function drawCompass() {
     const svg = document.getElementById('compSvg'), labels = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let h = '';
     for(let i=0; i<360; i+=10) {
@@ -152,13 +143,12 @@ function drawCompassTicks() {
 function update() {
     const id = document.getElementById('apSelect').value; if(id === "MANUAL") return;
     const ap = airportDB[id];
-    // 使用專業格式電碼
     const raw = `${id} 010500Z 10007KT 050V140 9999 FEW012 SCT025 BKN035 17/14 Q1018 NOSIG RMK A3006`;
     document.getElementById('rawView').innerText = raw;
     const wind = raw.match(/(\d{3})(\d{2,3})KT/), dir = parseInt(wind[1]), spd = parseInt(wind[2]);
     let best = "", minD = 180;
     for(let r in ap.rwys) {
-        let diff = Math.abs(dir - (ap.rwys[r] - ap.var)); if(diff > 180) diff = 360 - diff;
+        let diff = Math.abs(dir - ap.rwys[r].mag); if(diff > 180) diff = 360 - diff;
         if(diff < minD) { minD = diff; best = r; }
     }
     const rad = (minD * Math.PI) / 180;
@@ -172,13 +162,12 @@ function update() {
 
 function drawPattern(id, rwy) {
     const ap = airportDB[id], s = side === 'L' ? -1 : 1;
-    // 磁轉真校準
-    const trueHdg = ap.rwys[rwy] + ap.var;
+    const trueHdg = ap.rwys[rwy].true; // 地圖繪圖使用校準後的真航向
     const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
     const toRad = Math.PI / 180, rH = (90 - trueHdg) * toRad, rS = (90 - (trueHdg + 90 * s)) * toRad;
     const move = (p, ang, dist) => [p[0] + Math.sin(ang) * dist * latF, p[1] + Math.cos(ang) * dist * lonF];
     const c = [ap.lat, ap.lon];
-    const p1 = move(c, rH, 1.8), p2 = move(c, rH, -1.8), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
+    const p1 = move(c, rH, 1.5), p2 = move(c, rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
     pattern.setLatLngs([p1, p2, p3, p4, p1]);
 }
 
@@ -189,12 +178,11 @@ function transfer() {
 }
 
 function refreshTab2() {
-    const r = document.getElementById('tab2Rwy').value, ap = airportDB[cur.id], magH = ap.rwys[r] - ap.var;
+    const r = document.getElementById('tab2Rwy').value, ap = airportDB[cur.id], magH = ap.rwys[r].mag;
     const rot = magH - 90;
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
     n1.innerText = r; n2.innerText = (parseInt(r) > 18 ? parseInt(r)-18 : parseInt(r)+18).toString().padStart(2,'0');
-    // 反向旋轉補正文字
     n1.style.transform = `rotate(${-rot}deg)`; n2.style.transform = `rotate(${-rot}deg)`;
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${cur.dir}deg)`;
     const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(side==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(side==='L'?-1:1)+360)%360}];
