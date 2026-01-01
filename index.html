@@ -119,4 +119,91 @@ function init() {
     map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
-    patternOverlay
+    patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
+    
+    const sel = document.getElementById('apSelect');
+    groups.forEach(g => {
+        let grp = document.createElement('optgroup'); grp.label = g.label;
+        g.ids.forEach(id => grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)));
+        sel.appendChild(grp);
+    });
+    sel.add(new Option("📝 手動輸入 (Manual Input)...", "MANUAL"));
+    
+    drawCompassUI(); update();
+}
+
+function drawCompassUI() {
+    const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
+    let h = '';
+    for(let i=0; i<360; i+=10) {
+        let isL = i % 30 === 0, x1 = 100 + Math.sin(i*Math.PI/180) * (isL ? 82 : 88), y1 = 100 - Math.cos(i*Math.PI/180) * (isL ? 82 : 88);
+        let x2 = 100 + Math.sin(i*Math.PI/180) * 96, y2 = 100 - Math.cos(i*Math.PI/180) * 96;
+        h += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="${isL?2:1}" />`;
+        if(i % 90 === 0) h += `<text x="${100+Math.sin(i*Math.PI/180)*72}" y="${100-Math.cos(i*Math.PI/180)*72}" fill="white" font-size="14" font-weight="bold" text-anchor="middle" alignment-baseline="middle">${lbls[i]}</text>`;
+    }
+    svg.innerHTML = h;
+}
+
+function update() {
+    const id = document.getElementById('apSelect').value; if(id === "MANUAL") return;
+    const ap = airportDB[id];
+    // 專業 Raw Data 格式校正
+    const raw = `${id} 010630Z 10009KT 9999 FEW010 BKN022 BKN035 17/14 Q1018 NOSIG RMK A3006`;
+    document.getElementById('rawView').innerText = raw;
+    const wMatch = raw.match(/(\d{3})(\d{2,3})KT/), dir = parseInt(wMatch[1]), spd = parseInt(wMatch[2]);
+    let best = "", minD = 180;
+    for(let r in ap.rwys) {
+        let diff = Math.abs(dir - ap.rwys[r].mag); if(diff > 180) diff = 360 - diff;
+        if(diff < minD) { minD = diff; best = r; }
+    }
+    const rad = (minD * Math.PI) / 180;
+    currentData = { id, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
+    document.getElementById('estRwy').innerText = best;
+    document.getElementById('hWind').innerText = currentData.hw;
+    document.getElementById('cWind').innerText = currentData.cw;
+    map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
+    drawMapPattern(id, best);
+}
+
+function drawMapPattern(id, rwy) {
+    const ap = airportDB[id], s = trafficSide === 'L' ? -1 : 1;
+    const trueHdg = ap.rwys[rwy].true;
+    // 墨卡托投影比例校正公式
+    const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
+    const toRad = Math.PI / 180, rH = (90 - trueHdg) * toRad, rS = (90 - (trueHdg + 90 * s)) * toRad;
+    const move = (p, ang, dist) => [p[0] + Math.sin(ang) * dist * latF, p[1] + Math.cos(ang) * dist * lonF];
+    const c = [ap.lat, ap.lon];
+    const p1 = move(c, rH, 1.5), p2 = move(c, rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
+    patternOverlay.setLatLngs([p1, p2, p3, p4, p1]);
+}
+
+function transfer() {
+    const s = document.getElementById('tab2Rwy'); s.innerHTML = "";
+    for(let r in airportDB[currentData.id].rwys) { let o = new Option("RWY " + r, r); if(r === currentData.best) o.selected = true; s.add(o); }
+    refreshTab2(); switchTab(2);
+}
+
+function refreshTab2() {
+    const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id], magH = ap.rwys[r].mag;
+    const rot = magH - 90;
+    document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+    const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
+    n1.innerText = r; n2.innerText = (parseInt(r) > 18 ? parseInt(r)-18 : parseInt(r)+18).toString().padStart(2,'0');
+    // 數字頭部向上補正邏輯
+    n1.style.transform = `rotate(${-rot}deg)`; n2.style.transform = `rotate(${-rot}deg)`;
+    document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
+    const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(trafficSide==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(trafficSide==='L'?-1:1)+360)%360}];
+    let h = ""; legs.forEach(l => {
+        const a = (currentData.dir - l.t) * Math.PI / 180, wca = Math.round(Math.asin((currentData.spd * Math.sin(a)) / 90) * 180 / Math.PI);
+        h += `<tr style="border-bottom:1px solid #334151"><td style="padding:12px 8px">${l.n}</td><td align="center">${Math.round(l.t)}°</td><td align="center" style="color:var(--red)">${wca>0?'+':''}${wca}°</td><td align="right"><b>${((l.t+wca+360)%360).toString().padStart(3,'0')}°</b></td></tr>`;
+    });
+    document.getElementById('wcaList').innerHTML = h;
+    drawMapPattern(currentData.id, r);
+}
+
+function setSide(s) { trafficSide = s; document.getElementById('bL').className = s === 'L' ? 'active' : ''; document.getElementById('bR').className = s === 'R' ? 'active' : ''; refreshTab2(); }
+function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
+window.onload = init;
+</script>
+</body>
+</html>
