@@ -3,84 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Edition</title>
+    <title>Pocket METAR Pro - Instructor Edition V2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg-color: #1a1c23;
-            --card-bg: #242731;
-            --accent-blue: #4dabf7;
-            --text-main: #e0e0e0;
-            --text-dim: #a0a0a0;
-            --highlight: #51cf66;
+            --bg-color: #1a1c23; --card-bg: #242731; --accent-blue: #4dabf7;
+            --text-main: #e0e0e0; --text-dim: #a0a0a0; --highlight: #51cf66; --orange: #e67e22;
         }
-
-        body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 10px;
-        }
-
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 10px; }
         .container { max-width: 600px; margin: 0 auto; }
-
-        /* Tab System */
         .tabs { display: flex; gap: 5px; margin-bottom: 15px; }
-        .tab-btn {
-            flex: 1; padding: 12px; background: #333; border: none;
-            color: white; cursor: pointer; border-radius: 8px 8px 0 0;
-        }
+        .tab-btn { flex: 1; padding: 12px; background: #333; border: none; color: white; border-radius: 8px 8px 0 0; cursor: pointer; }
         .tab-btn.active { background: var(--accent-blue); font-weight: bold; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-
-        /* UI Components */
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-
-        select, button {
-            width: 100%; padding: 12px; border-radius: 6px;
-            border: 1px solid #444; background: #2d303a; color: white; margin-top: 10px;
-        }
-
-        .raw-data {
-            font-family: 'Courier New', monospace;
-            color: var(--highlight);
-            font-weight: bold;
-            font-size: 1.1em;
-            word-break: break-all;
-            border-left: 4px solid var(--highlight);
-            padding-left: 10px;
-        }
-
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .raw-data { font-family: 'Courier New', monospace; color: var(--highlight); font-weight: bold; font-size: 1.1em; border-left: 4px solid var(--highlight); padding-left: 10px; margin: 10px 0; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .info-item { background: #2d303a; padding: 10px; border-radius: 6px; }
-        .label { font-size: 0.8em; color: var(--text-dim); display: block; }
-        .value { font-size: 1.2em; font-weight: bold; }
-
-        /* Compass */
-        .compass-box {
-            position: relative; width: 150px; height: 150px;
-            margin: 20px auto; border: 2px solid #555; border-radius: 50%;
-        }
-        .compass-needle {
-            position: absolute; top: 50%; left: 50%;
-            width: 4px; height: 60px; background: red;
-            transform-origin: bottom center; transition: 0.5s;
-        }
-        .runway-line {
-            position: absolute; top: 50%; left: 50%;
-            width: 80%; height: 2px; background: white;
-            transform-origin: center; opacity: 0.5;
-        }
-
-        #map { height: 200px; border-radius: 8px; margin-top: 10px; }
+        .label { font-size: 0.75em; color: var(--text-dim); display: block; }
+        .value { font-size: 1.1em; font-weight: bold; }
+        .pattern-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .pattern-table th { font-size: 0.7em; color: var(--text-dim); text-align: left; padding: 4px; }
+        .pattern-table td { padding: 8px 4px; border-bottom: 1px solid #444; font-weight: bold; }
+        .wca-tag { color: #ff4757; font-size: 0.8em; margin-left: 5px; }
+        #map { height: 250px; border-radius: 8px; margin-top: 10px; border: 1px solid #444; }
+        select, .toggle-container { width: 100%; padding: 12px; background: #2d303a; color: white; border: 1px solid #444; border-radius: 6px; margin-top: 5px; box-sizing: border-box; }
+        .traffic-toggle { display: flex; gap: 10px; margin-top: 10px; }
+        .traffic-toggle button { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; background: #444; color: white; }
+        .traffic-toggle button.active { background: var(--orange); }
     </style>
 </head>
 <body>
@@ -88,112 +39,92 @@
 <div class="container">
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab(1)">Tab 1: 氣象解碼</button>
-        <button class="tab-btn" onclick="switchTab(2)">Tab 2: 起降計算</button>
+        <button class="tab-btn" onclick="switchTab(2)">Tab 2: 五邊計算</button>
     </div>
 
     <div id="tab1" class="tab-content active">
         <div class="card">
-            <label>選擇機場 (ICAO)</label>
+            <span class="label">AIRPORT SELECT</span>
             <select id="airportSelect" onchange="fetchMetar()">
-                <optgroup label="🇹🇼 台灣 Taiwan">
-                    <option value="RCTP">RCTP - 桃園 Taoyuan</option>
-                    <option value="RCSS" selected>RCSS - 松山 Songshan</option>
-                    <option value="RCKH">RCKH - 高雄 Kaohsiung</option>
-                    <option value="RCMQ">RCMQ - 台中 Taichung</option>
-                    <option value="RCNN">RCNN - 台南 Tainan</option>
-                    <option value="RCBS">RCBS - 金門 Kinmen</option>
-                    <option value="RCQC">RCQC - 澎湖 Penghu</option>
+                <optgroup label="🇹🇼 台灣">
+                    <option value="RCSS" selected>RCSS - 松山</option>
+                    <option value="RCTP">RCTP - 桃園</option>
+                    <option value="RCKH">RCKH - 高雄</option>
+                    <option value="RCNN">RCNN - 台南</option>
                 </optgroup>
-                <optgroup label="🌏 港澳/中國 East Asia">
-                    <option value="VHHH">VHHH - 香港 Hong Kong</option>
-                    <option value="VMMC">VMMC - 澳門 Macau</option>
-                    <option value="ZSPD">ZSPD - 上海浦東 Pudong</option>
-                    <option value="ZBAA">ZBAA - 北京首都 Beijing</option>
+                <optgroup label="🌏 國際">
+                    <option value="VHHH">VHHH - 香港</option>
+                    <option value="RJTT">RJTT - 羽田</option>
                 </optgroup>
-                <optgroup label="JPKR 日本/韓國 Japan/Korea">
-                    <option value="RJBB">RJBB - 大阪關西 Kansai</option>
-                    <option value="RJTT">RJTT - 東京羽田 Haneda</option>
-                    <option value="RJAA">RJAA - 東京成田 Narita</option>
-                    <option value="RKSI">RKSI - 首爾仁川 Incheon</option>
-                </optgroup>
-                <option value="MANUAL">📝 手動輸入 (Manual Input)...</option>
             </select>
         </div>
 
         <div class="card">
-            <span class="label">RAW METAR</span>
-            <div id="rawMetar" class="raw-data">正在取得資料...</div>
+            <span class="label">RAW DATA (FIRST)</span>
+            <div id="rawMetar" class="raw-data">Fetching...</div>
         </div>
 
         <div class="card">
+            <span class="label">EST. RUNWAY & MAP</span>
             <div class="info-grid">
-                <div class="info-item">
-                    <span class="label">預估使用跑道</span>
-                    <div id="estRunway" class="value" style="color:var(--accent-blue)">--</div>
-                </div>
-                <div class="info-item">
-                    <span class="label">風力分量 (KT)</span>
-                    <div id="windComp" class="value">H: 0 / C: 0</div>
-                </div>
+                <div class="info-item"><span class="label">建議跑道</span><div id="estRunway" class="value" style="color:var(--accent-blue)">--</div></div>
+                <div class="info-item"><span class="label">風力分量</span><div id="windComp" class="value">--</div></div>
             </div>
-            
             <div id="map"></div>
+        </div>
 
-            <div class="info-grid" style="margin-top:15px">
-                <div class="info-item"><span class="label">能見度</span><div id="vis" class="value">--</div></div>
-                <div class="info-item"><span class="label">雲層</span><div id="clouds" class="value">--</div></div>
+        <div class="card">
+            <span class="label">DECODER</span>
+            <div class="info-grid">
+                <div class="info-item"><span class="label">VIS</span><div id="vis" class="value">--</div></div>
                 <div class="info-item"><span class="label">QNH</span><div id="qnh" class="value">--</div></div>
-                <div class="info-item"><span class="label">溫度/露點</span><div id="tempDew" class="value">--</div></div>
+                <div class="info-item" style="grid-column: span 2;"><span class="label">CLOUDS</span><div id="clouds" class="value">--</div></div>
+                <div class="info-item" style="grid-column: span 2;"><span class="label">NOSIG/RMK</span><div id="remarks" class="value" style="font-size:0.9em">--</div></div>
             </div>
         </div>
-        
-        <button onclick="transferToTab2()" style="background: #e67e22;">傳送資料至 Tab 2 ➔</button>
+        <button onclick="transferToTab2()" style="width:100%; padding:15px; background:var(--orange); color:white; border:none; border-radius:8px; font-weight:bold;">傳送至五邊計算 ➔</button>
     </div>
 
     <div id="tab2" class="tab-content">
         <div class="card">
-            <h3>起降性能計算</h3>
-            <label>使用跑道 RWY</label>
-            <select id="tab2Runway">
-                </select>
-            
-            <div class="compass-box" id="compass">
-                <div class="runway-line" id="rwyLine"></div>
-                <div class="compass-needle" id="windArrow"></div>
+            <span class="label">RUNWAY & TRAFFIC SIDE</span>
+            <select id="tab2Runway" onchange="updateTab2()"></select>
+            <div class="traffic-toggle">
+                <button id="leftTraffic" class="active" onclick="setTraffic('L')">LEFT Traffic</button>
+                <button id="rightTraffic" onclick="setTraffic('R')">RIGHT Traffic</button>
             </div>
-            
-            <div class="info-grid">
-                <div class="info-item"><span class="label">Head/Tail Wind</span><div id="tab2Head" class="value">--</div></div>
-                <div class="info-item"><span class="label">Cross Wind</span><div id="tab2Cross" class="value">--</div></div>
-            </div>
+        </div>
+
+        <div class="card">
+            <span class="label">五邊數據 (TAS: 90kt)</span>
+            <table class="pattern-table">
+                <thead><tr><th>航段 Leg</th><th>Track</th><th>WCA</th><th>Heading (Fly)</th></tr></thead>
+                <tbody id="patternBody"></tbody>
+            </table>
         </div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 機場資料庫
 const airportDB = {
-    "RCSS": { name: "松山", coords: [25.0697, 121.5525], rwys: { "10": 100, "28": 280 } },
-    "RCTP": { name: "桃園", coords: [25.0797, 121.2342], rwys: { "05L": 52, "05R": 52, "23L": 232, "23R": 232 } },
-    "RCKH": { name: "高雄", coords: [22.5771, 120.3500], rwys: { "09": 90, "27": 270 } },
-    "VHHH": { name: "香港", coords: [22.3089, 113.9145], rwys: { "07L": 71, "07R": 71, "25L": 251, "25R": 251 } }
-    // 其他機場依此類推...
+    "RCSS": { coords: [25.0697, 121.5525], rwys: { "10": 100, "28": 280 } },
+    "RCTP": { coords: [25.0797, 121.2342], rwys: { "05L": 52, "05R": 52, "23L": 232, "23R": 232 } },
+    "RCKH": { coords: [22.5771, 120.3500], rwys: { "09": 90, "27": 270 } },
+    "RCNN": { coords: [22.9507, 120.2058], rwys: { "18R": 180, "36L": 360 } }
 };
 
-let map;
-let marker;
-let currentMetarData = null;
+let map, marker, patternRect, currentData = null, trafficSide = 'L';
 
 function initMap() {
-    map = L.map('map').setView([25.0697, 121.5525], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    map = L.map('map').setView([25.0697, 121.5525], 14);
+    L.tileLayer('https://{s}.tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=6170aad10236423390a448361754469c').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
+    patternRect = L.polyline([], {color: '#4dabf7', weight: 3, dashArray: '5, 10'}).addTo(map);
 }
 
 function switchTab(n) {
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById('tab' + n).classList.add('active');
     document.querySelectorAll('.tab-btn')[n-1].classList.add('active');
     if(n === 1) setTimeout(() => map.invalidateSize(), 200);
@@ -201,105 +132,104 @@ function switchTab(n) {
 
 async function fetchMetar() {
     const icao = document.getElementById('airportSelect').value;
-    const data = airportDB[icao];
-    
-    // 更新地圖
-    if(data) {
-        map.setView(data.coords, 13);
-        marker.setLatLng(data.coords);
-    }
-
-    // 模擬 METAR API 抓取 (實際開發時換成教官的 API)
-    const mockMetar = `${icao} 010430Z 09012KT 9999 FEW012 SCT080 18/12 Q1013 NOSIG`;
-    document.getElementById('rawMetar').innerText = mockMetar;
-    parseMetar(mockMetar, icao);
+    const mock = `${icao} 010500Z 05012KT 9999 FEW015 SCT080 20/14 Q1015 NOSIG RMK (TRAINING)`;
+    document.getElementById('rawMetar').innerText = mock;
+    decode(mock, icao);
 }
 
-function parseMetar(raw, icao) {
-    const windMatch = raw.match(/(\d{3})(\d{2,3})KT/);
-    const windDir = windMatch ? parseInt(windMatch[1]) : 0;
-    const windSpd = windMatch ? parseInt(windMatch[2]) : 0;
-    
-    // 跑道計算邏輯
-    const airport = airportDB[icao];
-    let bestRwy = "--";
-    let minDiff = 180;
-
-    if(airport) {
-        for (let rwy in airport.rwys) {
-            let diff = Math.abs(windDir - airport.rwys[rwy]);
-            if (diff > 180) diff = 360 - diff;
-            if (diff < minDiff) {
-                minDiff = diff;
-                bestRwy = rwy;
-            }
-        }
+function decode(raw, icao) {
+    const wind = raw.match(/(\d{3})(\d{2,3})KT/);
+    const dir = wind ? parseInt(wind[1]) : 0;
+    const spd = wind ? parseInt(wind[2]) : 0;
+    const ap = airportDB[icao];
+    let best = "--", minD = 180;
+    for(let r in ap.rwys) {
+        let d = Math.abs(dir - ap.rwys[r]); if(d>180) d=360-d;
+        if(d < minD) { minD = d; best = r; }
     }
-
-    // 計算分量
-    const angleRad = (minDiff * Math.PI) / 180;
-    const hw = Math.round(windSpd * Math.cos(angleRad));
-    const cw = Math.round(windSpd * Math.sin(angleRad));
-
-    document.getElementById('estRunway').innerText = bestRwy;
-    document.getElementById('windComp').innerText = `H: ${hw} / C: ${cw}`;
+    const rad = (minD * Math.PI) / 180;
+    currentData = { icao, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
+    document.getElementById('estRunway').innerText = best;
+    document.getElementById('windComp').innerText = `H: ${currentData.hw} / C: ${currentData.cw}`;
     document.getElementById('vis').innerText = "10km+";
-    document.getElementById('clouds').innerText = "FEW 1200ft";
-    document.getElementById('qnh').innerText = "1013 hPa";
-    document.getElementById('tempDew').innerText = "18°C / 12°C";
+    document.getElementById('qnh').innerText = "1015 hPa";
+    document.getElementById('clouds').innerText = "FEW 1500ft, SCT 8000ft";
+    document.getElementById('remarks').innerText = "NOSIG - No significant change expected.";
+    map.setView(ap.coords, 14);
+    marker.setLatLng(ap.coords);
+    drawPattern(icao, best);
+}
+
+function drawPattern(icao, rwy) {
+    const ap = airportDB[icao];
+    const hdg = ap.rwys[rwy];
+    const lat = ap.coords[0], lon = ap.coords[1];
+    const dist = 0.015; // 比例常數
+    const side = trafficSide === 'L' ? -1 : 1;
     
-    currentMetarData = { icao, bestRwy, windDir, windSpd, hw, cw };
+    // 計算四個角 (簡單三角函數估算長方形)
+    const angle = (hdg - 90) * Math.PI / 180;
+    const p1 = [lat + Math.cos(angle)*dist*2, lon + Math.sin(angle)*dist*2]; // Final
+    const p2 = [lat - Math.cos(angle)*dist*2, lon - Math.sin(angle)*dist*2]; // Upwind
+    const p3 = [p2[0] + Math.cos(angle + Math.PI/2*side)*dist, p2[1] + Math.sin(angle + Math.PI/2*side)*dist]; // Crosswind
+    const p4 = [p1[0] + Math.cos(angle + Math.PI/2*side)*dist, p1[1] + Math.sin(angle + Math.PI/2*side)*dist]; // Downwind
+    
+    patternRect.setLatLngs([p1, p2, p3, p4, p1]);
+}
+
+function setTraffic(s) {
+    trafficSide = s;
+    document.getElementById('leftTraffic').classList.toggle('active', s==='L');
+    document.getElementById('rightTraffic').classList.toggle('active', s==='R');
+    updateTab2();
 }
 
 function transferToTab2() {
-    if(!currentMetarData) return;
-    
-    const icao = currentMetarData.icao;
-    const airport = airportDB[icao];
-    const rwySelect = document.getElementById('tab2Runway');
-    
-    // 更新下拉選單
-    rwySelect.innerHTML = "";
-    for (let rwy in airport.rwys) {
-        let opt = document.createElement('option');
-        opt.value = rwy;
-        opt.innerText = `RWY ${rwy}`;
-        if(rwy === currentMetarData.bestRwy) opt.selected = true;
-        rwySelect.appendChild(opt);
+    const sel = document.getElementById('tab2Runway');
+    sel.innerHTML = "";
+    for(let r in airportDB[currentData.icao].rwys) {
+        let opt = new Option("RWY " + r, r);
+        if(r === currentData.best) opt.selected = true;
+        sel.add(opt);
     }
-
-    updateCompass();
+    updateTab2();
     switchTab(2);
 }
 
-function updateCompass() {
-    const icao = currentMetarData.icao;
-    const rwyKey = document.getElementById('tab2Runway').value;
-    const rwyHeading = airportDB[icao].rwys[rwyKey];
-    const windDir = currentMetarData.windDir;
-
-    // 旋轉跑道線與風向箭頭
-    document.getElementById('rwyLine').style.transform = `translate(-50%, -50%) rotate(${rwyHeading - 90}deg)`;
-    document.getElementById('windArrow').style.transform = `translate(-50%, -100%) rotate(${windDir}deg)`;
-    
-    // 重新計算選中跑道的分量
-    let diff = Math.abs(windDir - rwyHeading);
-    if (diff > 180) diff = 360 - diff;
-    const angleRad = (diff * Math.PI) / 180;
-    const hw = Math.round(currentMetarData.windSpd * Math.cos(angleRad));
-    const cw = Math.round(currentMetarData.windSpd * Math.sin(angleRad));
-
-    document.getElementById('tab2Head').innerText = hw + " KT";
-    document.getElementById('tab2Cross').innerText = cw + " KT";
+function calculateWCA(track, windDir, windSpd, tas = 90) {
+    const angle = (windDir - track) * Math.PI / 180;
+    const wcaRad = Math.asin((windSpd * Math.sin(angle)) / tas);
+    const wcaDeg = Math.round(wcaRad * 180 / Math.PI);
+    return isNaN(wcaDeg) ? 0 : wcaDeg;
 }
 
-document.getElementById('tab2Runway').addEventListener('change', updateCompass);
+function updateTab2() {
+    const rwy = document.getElementById('tab2Runway').value;
+    const hdg = airportDB[currentData.icao].rwys[rwy];
+    const side = trafficSide === 'L' ? -1 : 1;
+    const tas = 90;
+    
+    const legs = [
+        { name: "Upwind", track: hdg },
+        { name: "Crosswind", track: (hdg + 270 * side + 360) % 360 },
+        { name: "Downwind", track: (hdg + 180) % 360 },
+        { name: "Base", track: (hdg + 90 * side + 360) % 360 },
+        { name: "Final", track: hdg }
+    ];
 
-window.onload = () => {
-    initMap();
-    fetchMetar();
-};
+    let html = "";
+    legs.forEach(l => {
+        const wca = calculateWCA(l.track, currentData.dir, currentData.spd, tas);
+        const flyHdg = (l.track + wca + 360) % 360;
+        html += `<tr><td>${l.name}</td><td>${l.track.toString().padStart(3,'0')}°</td>
+                 <td class="wca-tag">${wca > 0 ? '+' : ''}${wca}°</td>
+                 <td>${flyHdg.toString().padStart(3,'0')}°</td></tr>`;
+    });
+    document.getElementById('patternBody').innerHTML = html;
+    drawPattern(currentData.icao, rwy);
+}
+
+window.onload = () => { initMap(); fetchMetar(); };
 </script>
-
 </body>
 </html>
