@@ -172,17 +172,29 @@ async function update() {
         dText += raw.includes("WS") ? "WS (有風切 Wind Shear)\n" : "";
         dText += raw.includes("VC") ? "VC (機場周邊 Vicinity)\n" : "";
         dText += raw.includes("NSW") ? "NSW (無顯著天氣現象)\n" : "";
-        // 天氣代碼部分
-        dText += raw.includes("DZ") ? "DZ (毛毛雨)\n" : "";
-        dText += raw.includes("RA") ? "RA (下雨)\n" : "";
+        // --- 天氣現象解譯 (含強度判斷 +/-) ---
+         // 1. 雨 RA (Rain)
+        dText += raw.includes("-RA") ? "-RA (小雨 Light Rain)\n" : 
+                 raw.includes("+RA") ? "+RA (大雨 Heavy Rain)\n" : 
+                 raw.includes("RA")  ? "RA (下雨 Rain)\n" : "";
+       // 2. 毛毛雨 DZ (Drizzle)
+        dText += raw.includes("-DZ") ? "-DZ (小毛毛雨 Light Drizzle)\n" : 
+                 raw.includes("+DZ") ? "+DZ (大毛毛雨 Heavy Drizzle)\n" : 
+                 raw.includes("DZ")  ? "DZ (毛毛雨 Drizzle)\n" : "";
+      // 3. 雷雨 TS (Thunderstorm)
+        dText += raw.includes("TSRA") ? "TSRA (雷雨伴隨降雨 Thunderstorm w/ Rain)\n" : 
+                 raw.includes("TS")   ? "TS (雷雨 Thunderstorm)\n" : "";
+     // 4. 陣雨 SH (Showers)
+        dText += raw.includes("-SH") ? "-SH (小陣雨 Light Showers)\n" : 
+                 raw.includes("+SH") ? "+SH (強陣雨 Heavy Showers)\n" : 
+                 raw.includes("SH")  ? "SH (陣雨 Showers)\n" : "";
+     // 5. 其他天氣現象 (維持原樣)
         dText += raw.includes("SN") ? "SN (雪)\n" : "";
-        dText += raw.includes("TS") ? "TS (雷雨)\n" : "";
         dText += raw.includes("FG") ? "FG (霧)\n" : "";
         dText += raw.includes("BR") ? "BR (薄霧)\n" : "";
         dText += raw.includes("HZ") ? "HZ (霾)\n" : "";
-        dText += raw.includes("SH") ? "SH (陣雨)\n" : "";
-        dText += raw.includes("FZ") ? "FZ (凍)\n" : "";
-        dText += raw.includes("BC") ? "BC (散片)\n" : "";
+        dText += raw.includes("FZ") ? "FZ (凍結性質 Freezing)\n" : "";
+        dText += raw.includes("BC") ? "BC (散片狀 Patches)\n" : "";
 
         document.getElementById('rmkBox').innerText = dText || "無特殊天氣現象";
 
