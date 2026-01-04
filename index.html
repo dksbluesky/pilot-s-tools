@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Edition v2</title>
+    <title>Pocket METAR Pro - Instructor Edition v2.2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; --warn: #facc15; }
@@ -115,6 +115,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// 【完全保留 DK 的原始資料庫結構】
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -169,8 +170,8 @@ async function update() {
         const raw = await response.text(); if(!raw || raw.trim().length === 0) throw new Error("No Data");
         document.getElementById('rawView').innerText = raw.trim();
 
-        // 1. 風向風速解析 (VRB/靜風)
-        const wMatch = raw.match(/(VRB|\d{3})(\d{2,3})KT/);
+        // 1. 風向風速解析 (支援陣風 G)
+        const wMatch = raw.match(/(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT/);
         let dir = 0, spd = 0, isVrb = false;
         if (wMatch) {
             isVrb = wMatch[1] === "VRB";
@@ -178,7 +179,7 @@ async function update() {
             spd = parseInt(wMatch[2]);
         }
 
-        // 2. 氣壓單位兼容 (QNH vs Altimeter)
+        // 2. 氣壓單位兼容
         const qnhMatch = raw.match(/Q(\d{4})/);
         const altMatch = raw.match(/A(\d{4})/);
         let qnhStr = "--";
@@ -268,81 +269,51 @@ function transfer() {
 function setSide(s) { trafficSide = s; document.getElementById('bL').style.background = s === 'L' ? 'var(--accent)' : '#334155'; document.getElementById('bR').style.background = s === 'R' ? 'var(--accent)' : '#334155'; refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
 
-// --- 核心併合引擎：修正版 ---
+// 【精確修正後的 CSV 整合邏輯】
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
-        const rText = await rRes.text(), nText = await nRes.text(), navMap = {};
+        const rText = await rRes.text(), nText = await nRes.text();
+        const navMap = {};
 
-        // 1. 先處理導航台 (Navaids)
+        // 1. 索引 Navaids (ILS)
         nText.split('\n').slice(1).forEach(line => {
-            const c = parseCSVLine(line); if (c.length < 20) return;
+            const c = line.split(','); if (c.length < 20) return;
             const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'').toUpperCase();
-            if (type.includes('ILS') || type.includes('TACAN') || type.includes('DME')) {
+            if (type.includes('ILS')) {
                 if (!navMap[icao]) navMap[icao] = [];
-                navMap[icao].push({ 
-                    type, 
-                    ident: c[2].replace(/"/g,''), 
-                    name: c[3].replace(/"/g,''), 
-                    freq: c[5], 
-                    chan: c[11].replace(/"/g,'') 
-                });
+                navMap[icao].push({ ident: c[2].replace(/"/g,''), freq: c[5] });
             }
         });
 
-        // 2. 處理跑道並與導航台配對 (Runways)
+        // 2. 雙向索引 Runways (修正原本漏掉一頭的問題)
         rText.split('\n').slice(1).forEach(line => {
-            const c = parseCSVLine(line); if (c.length < 13) return;
+            const c = line.split(','); if (c.length < 15) return;
             const icao = c[2].replace(/"/g,'').trim().toUpperCase();
-            if (!icao) return;
             if (!navDataDB[icao]) navDataDB[icao] = {};
 
-            const navs = navMap[icao] || [];
-
-            // 輔助函數：幫特定跑道號碼找 ILS
-            const findILS = (rID) => {
-                const rNum = rID.replace(/\D/g,'');
-                const ils = navs.find(n => n.type.includes('ILS') && (n.name.includes(rNum) || n.ident.includes(rNum)));
-                const tacan = navs.find(n => (n.type.includes('TACAN') || n.type.includes('DME')) && n.chan !== "");
-                let fVal = "N/A"; 
-                if(ils) { 
-                    let f = parseFloat(ils.freq); 
-                    fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); 
-                }
-                return { 
+            // 同時處理低位端 (le_ident c[8]) 和 高位端 (he_ident c[14])
+            [ {id: c[8], hdg: c[11]}, {id: c[14], hdg: c[17]} ].forEach(end => {
+                const rwyId = end.id.replace(/"/g,'').trim();
+                if (!rwyId) return;
+                
+                // 修正對齊邏輯：尋找包含跑道數字的 ILS Ident
+                const ils = (navMap[icao] || []).find(n => n.ident.includes(rwyId.replace(/\D/g,'')));
+                navDataDB[icao][rwyId] = { 
                     ident: ils ? ils.ident : "N/A", 
-                    ils: fVal, 
-                    tacan: tacan ? tacan.chan : "N/A" 
+                    ils: ils ? parseFloat(ils.freq).toFixed(2) : "N/A", 
+                    crs: end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))) : rwyId + "0" 
                 };
-            };
-
-            // --- 修正重點：同時處理跑道兩頭 ---
-            // Low End (例如 05L)
-            const leID = c[8].replace(/"/g,'').trim();
-            if(leID) {
-                const data = findILS(leID);
-                navDataDB[icao][leID] = { ...data, crs: c[12] || leID+"0" };
-            }
-
-            // High End (例如 23R) - 這是你原本漏掉的
-            if(c.length > 14) {
-                const heID = c[14].replace(/"/g,'').trim();
-                if(heID) {
-                    const data = findILS(heID);
-                    navDataDB[icao][heID] = { ...data, crs: c[18] || heID+"0" };
-                }
-            }
+            });
         });
-        console.log("併合完成！", navDataDB);
-        document.getElementById('rawView').innerText = "導航數據庫已就緒。";
-    } catch (e) { 
-        console.error("CSV Error", e); 
-    }
+        document.getElementById('rawView').innerText = "導航數據庫已就緒 (ILS 雙向校準)。";
+    } catch (e) { document.getElementById('rawView').innerText = "導航庫讀取失敗 (本地測試請忽略)"; }
 }
 
 function drawMapPattern(id, rwy) {
     const ap = airportDB[id]; if(!ap || !ap.rwys[rwy]) return;
     const s = trafficSide === 'L' ? -1 : 1, tH = ap.rwys[rwy].true;
+    // 修正：在地圖繪製時考慮緯度導致的 lon 壓縮比
     const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
     const toR = Math.PI / 180, rH = (90 - tH) * toR, rS = (90 - (tH + 90 * s)) * toR;
     const m = (p, a, d) => [p[0] + Math.sin(a) * d * latF, p[1] + Math.cos(a) * d * lonF];
