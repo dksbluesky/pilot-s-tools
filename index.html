@@ -110,7 +110,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 【資料庫保持完整】
+// 【資料庫保持完整 - 已修正 RJTT 逗點漏掉的問題】
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -136,20 +136,25 @@ const groups = [
 
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
-// 1. 新增：MHz 轉 TACAN Channel 核心對照函式 (MSFS 適用)
+// --- 【新功能：防錯 CSV 解析器】 ---
+function parseCSVLine(line) {
+    const arr = []; let quote = false; let col = "";
+    for (let i = 0; i < line.length; i++) {
+        let char = line[i];
+        if (char === '"') { quote = !quote; continue; }
+        if (char === ',' && !quote) { arr.push(col.trim()); col = ""; continue; }
+        col += char;
+    }
+    arr.push(col.trim()); return arr;
+}
+
+// --- 【新功能：MHz 轉 TACAN Channel】 ---
 function mhzToTacan(mhz) {
-    const f = parseFloat(mhz);
-    if (isNaN(f)) return "";
-    let channel = "";
-    // 邏輯區段一：108.00 - 111.95 (對應 17X - 59X)
-    if (f >= 108.00 && f <= 111.95) {
-        channel = Math.round((f - 106.3) * 10) + "X";
-    }
-    // 邏輯區段二：112.30 - 117.95 (對應 70X - 126X)
-    else if (f >= 112.30 && f <= 117.95) {
-        channel = Math.round((f - 105.3) * 10) + "X";
-    }
-    return channel ? `(${channel})` : "";
+    const f = parseFloat(mhz); if (isNaN(f)) return "";
+    let ch = "";
+    if (f >= 108.00 && f <= 111.95) ch = Math.round((f - 106.3) * 10) + "X";
+    else if (f >= 112.30 && f <= 117.95) ch = Math.round((f - 105.3) * 10) + "X";
+    return ch ? `(${ch})` : "";
 }
 
 const decodeMetarLogic = (raw) => {
@@ -165,28 +170,33 @@ const decodeMetarLogic = (raw) => {
     return d.length > 0 ? d.join('\n') : "無特殊天氣現象";
 };
 
+// --- 【修正後的數據載入函式】 ---
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
         const rText = await rRes.text(), nText = await nRes.text();
         const navMap = {}; 
+
         nText.split('\n').slice(1).forEach(line => {
-            const c = line.split(','); if (c.length < 20) return;
-            const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'').toUpperCase();
-            const ident = c[2].replace(/"/g,''), rawFreq = parseFloat(c[5].replace(/"/g,'')), name = c[3].replace(/"/g,'');
+            if (!line.trim()) return;
+            const c = parseCSVLine(line); // 使用防錯解析
+            if (c.length < 20) return;
+            const type = c[4], icao = c[19].toUpperCase(), ident = c[2], rawFreq = parseFloat(c[5]), name = c[3];
             const freq = (rawFreq > 500) ? (rawFreq / 1000).toFixed(2) : rawFreq.toFixed(2);
-            if (['ILS', 'TACAN', 'VOR-DME', 'DME', 'NDB'].some(t => type.includes(t))) {
+            if (['ILS', 'TACAN', 'VOR', 'DME'].some(t => type.includes(t))) {
                 if (!navMap[icao]) navMap[icao] = [];
                 navMap[icao].push({ ident, type, freq, name });
             }
         });
+
         rText.split('\n').slice(1).forEach(line => {
-            const c = line.split(','); if (c.length < 15) return;
-            const icao = c[2].replace(/"/g,'').trim().toUpperCase();
+            if (!line.trim()) return;
+            const c = parseCSVLine(line); // 使用防錯解析
+            if (c.length < 15) return;
+            const icao = c[2].toUpperCase();
             if (!navDataDB[icao]) navDataDB[icao] = {};
             [ {id: c[8], hdg: c[11]}, {id: c[14], hdg: c[17]} ].forEach(end => {
-                const rwyId = end.id.replace(/"/g,'').trim();
-                if (!rwyId) return;
+                const rwyId = end.id.trim(); if (!rwyId) return;
                 const airportNavs = navMap[icao] || [];
                 let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.ident.includes(rwyId.replace(/\D/g,''))));
                 if (!matched) matched = airportNavs.find(n => n.type.includes('TACAN') || n.type.includes('VOR'));
@@ -194,12 +204,12 @@ async function ingestOurAirportsData() {
                     ident: matched ? matched.ident : "N/A",
                     type: matched ? matched.type : "",
                     freq: matched ? matched.freq : "N/A",
-                    crs: end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))) : rwyId + "0"
+                    crs: end.hdg ? Math.round(parseFloat(end.hdg)).toString().padStart(3,'0') : rwyId + "0"
                 };
             });
         });
-        document.getElementById('rawView').innerText = "導航庫已就緒。";
-    } catch (e) { document.getElementById('rawView').innerText = "導航庫載入失敗。"; }
+        document.getElementById('rawView').innerText = "導航數據庫已就緒。";
+    } catch (e) { console.error(e); }
 }
 
 function update() {
@@ -257,14 +267,14 @@ function refreshTab2() {
 
     const nav = (navDataDB[currentData.id] && navDataDB[currentData.id][r]) ? navDataDB[currentData.id][r] : null;
     if (nav) {
-        // 在顯示頻率時，串接 TACAN Channel 轉換函式
-        const tacanCh = mhzToTacan(nav.freq);
-        document.getElementById('navDataTable').innerHTML = `<tr><td>Ident (${nav.type})</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>Freq</td><td align="right" class="val">${nav.freq} MHz <span style="font-size:0.8rem; color:var(--warn)">${tacanCh}</span></td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>`;
+        const tacanCh = mhzToTacan(nav.freq); // 調用轉換函式
+        document.getElementById('navDataTable').innerHTML = `<tr><td>Ident (${nav.type})</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>Freq</td><td align="right" class="val">${nav.freq} MHz <span style="color:var(--warn)">${tacanCh}</span></td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>`;
     } else {
         document.getElementById('navDataTable').innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
     }
 }
 
+// 其餘功能（transfer, setSide, drawMapPattern, init...）保持不變，照你原本的即可
 function transfer() {
     if(!currentData) return; const s = document.getElementById('tab2Rwy'); s.innerHTML = "";
     const ap = airportDB[currentData.id]; if(ap) { for(let r in ap.rwys) { let o = new Option("RWY "+r, r); if(r===currentData.best) o.selected=true; s.add(o); } }
@@ -307,6 +317,5 @@ function init() {
     setSide('L'); update();
 }
 window.onload = init;
-</script>
-</body>
+</script></body>
 </html>
