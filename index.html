@@ -146,58 +146,76 @@ function parseCSVLine(line) {
 
 async function ingestOurAirportsData() {
     try {
-        console.log("正在從 GitHub 讀取 CSV...");
+        console.log("正在從 GitHub 讀取原始 CSV...");
         const [rwyRes, navRes] = await Promise.all([
             fetch('runways.csv'),
             fetch('navaids.csv')
         ]);
+
         if (!rwyRes.ok || !navRes.ok) throw new Error("檔案讀取失敗");
 
         const rwyText = await rwyRes.text();
         const navText = await navRes.text();
 
+        // 1. 處理 navaids.csv (建立導航站映射)
         const navMap = {}; 
         navText.split('\n').slice(1).forEach(line => {
             const cols = parseCSVLine(line);
             if (cols.length < 20) return;
-            const type = cols[4]; 
-            const icao = cols[19]; 
-            if (type.includes('ILS') || type.includes('TACAN')) {
+            
+            const type = cols[4].replace(/"/g, ''); // 類型 (索引 4)
+            const icao = cols[19].trim().replace(/"/g, ''); // 機場識別碼 (索引 19)
+            
+            if (type.includes('ILS') || type.includes('TACAN') || type.includes('DME')) {
                 if (!navMap[icao]) navMap[icao] = [];
                 navMap[icao].push({
                     type: type,
-                    ident: cols[2],
-                    name: cols[3],
-                    freq: (parseInt(cols[5]) / 1000).toFixed(2),
-                    chan: cols[11]
+                    ident: cols[2].replace(/"/g, ''), // 識別碼 (索引 2)
+                    name: cols[3].replace(/"/g, ''),  // 名稱 (索引 3)
+                    freq: cols[5], // 原始頻率 (索引 5)
+                    chan: cols[11].replace(/"/g, '')  // 頻道 (索引 11)
                 });
             }
         });
 
+        // 2. 處理 runways.csv 並與設備併合
         rwyText.split('\n').slice(1).forEach(line => {
             const cols = parseCSVLine(line);
             if (cols.length < 13) return;
-            const icao = cols[2];
-            const rwyId = cols[8];
-            const trueCrs = cols[12];
+            const icao = cols[2].replace(/"/g, ''); // 機場 (索引 2)
+            const rwyId = cols[8].replace(/"/g, ''); // 跑道號 (索引 8)
+            const trueCrs = cols[12].replace(/"/g, ''); // 航向 (索引 12)
 
             if (icao && rwyId) {
                 if (!navDataDB[icao]) navDataDB[icao] = {};
+                
                 const navs = navMap[icao] || [];
-                // 精確搜尋包含跑道編號的設備
-                const ilsMatch = navs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.ident.includes(rwyId)));
-                const tacanMatch = navs.find(n => n.type.includes('TACAN') || n.chan !== "");
+                
+                // 靈活搜尋：只要設備名稱包含跑道號 (如 "05L") 且類型包含 ILS
+                const ilsMatch = navs.find(n => n.type.includes('ILS') && n.name.toUpperCase().includes(rwyId.toUpperCase()));
+                
+                // TACAN 搜尋：找該機場第一個 TACAN 或帶有頻道的 DME
+                const tacanMatch = navs.find(n => n.type.includes('TACAN') || (n.type.includes('DME') && n.chan !== ""));
+
+                // 頻率格式化
+                let formattedFreq = "N/A";
+                if (ilsMatch) {
+                    let f = parseFloat(ilsMatch.freq);
+                    formattedFreq = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2);
+                }
 
                 navDataDB[icao][rwyId] = {
                     ident: ilsMatch ? ilsMatch.ident : "N/A",
-                    ils: ilsMatch ? ilsMatch.freq : "N/A",
+                    ils: formattedFreq,
                     crs: trueCrs || rwyId + "0",
                     tacan: tacanMatch ? tacanMatch.chan : "N/A"
                 };
             }
         });
-        console.log("導航數據併合完成！");
-    } catch (err) { console.error("CSV 解析錯誤:", err); }
+        console.log("導航數據併合完成！", navDataDB); // 這裡印出結果方便檢查
+    } catch (err) { 
+        console.error("CSV 引擎錯誤:", err); 
+    }
 }
 
 // 其餘 update, init, transfer, refreshTab2, switchTab, drawMapPattern, drawCompassUI 等函式維持原狀即可
