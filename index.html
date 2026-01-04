@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Edition v2.4</title>
+    <title>Pocket METAR Pro - v2.5 TACAN Edit</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; --warn: #facc15; }
@@ -38,9 +38,6 @@
         .info-item { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border-left: 3px solid #475569; }
         .warn-text { color: var(--red) !important; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.5; } }
-        /* 表格微調 */
-        #wcaList td { padding: 8px 4px; }
-        .leg-header { font-size: 0.65rem; color: var(--dim); padding-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -105,21 +102,7 @@
             </div>
         </div>
         <div class="calc-row">
-            <div class="card">
-                <span class="label-sm">航線修正 WCA & GS</span>
-                <table style="width:100%; font-size: 0.9rem; border-collapse: collapse; text-align: center;">
-                    <thead>
-                        <tr>
-                            <th class="leg-header" align="left">Leg</th>
-                            <th class="leg-header">TR</th>
-                            <th class="leg-header">WCA</th>
-                            <th class="leg-header">TH</th>
-                            <th class="leg-header" align="right">GS</th>
-                        </tr>
-                    </thead>
-                    <tbody id="wcaList"></tbody>
-                </table>
-            </div>
+            <div class="card"><span class="label-sm">航線修正 WCA & GS</span><table style="width:100%; font-size: 0.9rem; border-collapse: collapse; text-align: center;"><tbody id="wcaList"></tbody></table></div>
             <div class="card"><span class="label-sm">導航資料 NAV DATA (ILS/TACAN)</span><table class="nav-table"><tbody id="navDataTable"></tbody></table></div>
         </div>
     </div>
@@ -127,6 +110,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// 【資料庫保持完整】
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -149,7 +133,24 @@ const groups = [
     { label: "🌏 亞太 Asia-Pacific", ids: ["VHHH", "VMMC", "WSSS", "RKSI", "RJTT"] },
     { label: "🇺🇸 歐美 Global", ids: ["KJFK", "KLAX"] }
 ];
+
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
+
+// 1. 新增：MHz 轉 TACAN Channel 核心對照函式 (MSFS 適用)
+function mhzToTacan(mhz) {
+    const f = parseFloat(mhz);
+    if (isNaN(f)) return "";
+    let channel = "";
+    // 邏輯區段一：108.00 - 111.95 (對應 17X - 59X)
+    if (f >= 108.00 && f <= 111.95) {
+        channel = Math.round((f - 106.3) * 10) + "X";
+    }
+    // 邏輯區段二：112.30 - 117.95 (對應 70X - 126X)
+    else if (f >= 112.30 && f <= 117.95) {
+        channel = Math.round((f - 105.3) * 10) + "X";
+    }
+    return channel ? `(${channel})` : "";
+}
 
 const decodeMetarLogic = (raw) => {
     const tokens = raw.split(' ');
@@ -206,36 +207,28 @@ function update() {
     const ap = airportDB[id] || { name: id, lat: 25.07, lon: 121.23, rwys: {} };
     fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`).then(r => r.text()).then(raw => {
         document.getElementById('rawView').innerText = raw.trim();
-        
         const wMatch = raw.match(/(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT/);
         let dir = 0, spd = 0; if (wMatch) { dir = wMatch[1]==="VRB"?0:parseInt(wMatch[1]); spd = parseInt(wMatch[2]); }
-        
         const visMatch = raw.match(/\b\d{4}\b/);
         document.getElementById('visVal').innerText = visMatch ? (visMatch[0]==="9999" ? "10km+" : visMatch[0]+"m") : "N/A";
-        
         const qMatch = raw.match(/Q(\d{4})/);
         const aMatch = raw.match(/A(\d{4})/);
         document.getElementById('qnhVal').innerText = qMatch ? qMatch[1]+" hPa" : (aMatch ? (parseInt(aMatch[1])/100).toFixed(2)+" inHg" : "--");
-
         const cloudRegex = /(FEW|SCT|BKN|OVC|VV)(\d{3})/g;
         let cMatch, cloudsHtml = "";
         while ((cMatch = cloudRegex.exec(raw)) !== null) {
             cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`;
         }
         document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
-
         document.getElementById('rmkBox').innerText = decodeMetarLogic(raw);
-
         let best = "--", minD = 180;
         for(let r in ap.rwys) { let diff = Math.abs(dir-ap.rwys[r].mag); if(diff>180) diff=360-diff; if(diff<minD){minD=diff; best=r;} }
         const hw = Math.round(spd * Math.cos(minD*Math.PI/180)), cw = Math.round(spd * Math.sin(minD*Math.PI/180));
         currentData = { id, dir, spd, best, hw, cw };
-        
         document.getElementById('estRwy').innerText = best;
         document.getElementById('hWind').innerText = hw;
         document.getElementById('cWind').innerText = cw;
         document.getElementById('cWind').className = cw > 15 ? "warn-text" : "";
-        
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         if(best !== "--") drawMapPattern(id, best);
     });
@@ -246,41 +239,30 @@ function refreshTab2() {
     const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id];
     const tas = parseInt(document.getElementById('tasInput').value) || 90;
     const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
-    
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${magH-90}deg)`;
     document.getElementById('n1').innerText = r; document.getElementById('n2').innerText = (parseInt(r)>18?parseInt(r)-18:parseInt(r)+18).toString().padStart(2,'0');
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
     
-    const legs = [
-        {n:"Upwind", t:magH}, 
-        {n:"Cross", t:(magH+(trafficSide==='L'?-90:90)+360)%360}, 
-        {n:"Downwind", t:(magH+180)%360}, 
-        {n:"Base", t:(magH+(trafficSide==='L'?90:-90)+360)%360}
-    ];
-
+    const legs = [{n:"Upwind", t:magH}, {n:"Cross", t:(magH+(trafficSide==='L'?-90:90)+360)%360}, {n:"Downwind", t:(magH+180)%360}, {n:"Base", t:(magH+(trafficSide==='L'?90:-90)+360)%360}];
     let h = ""; legs.forEach(l => {
-        // 風角與 WCA 計算
         const alpha = (currentData.dir - l.t) * Math.PI / 180;
         let wcaRad = Math.asin((currentData.spd * Math.sin(alpha)) / tas);
         if(isNaN(wcaRad)) wcaRad = 0;
         const wcaDeg = Math.round(wcaRad * 180 / Math.PI);
-        
-        // GS 計算公式
         const gs = Math.round(tas * Math.cos(wcaRad) + currentData.spd * Math.cos(alpha));
         const th = (l.t + wcaDeg + 360) % 360;
-
-        h += `<tr>
-                <td align="left"><b>${l.n}</b></td>
-                <td>${Math.round(l.t)}°</td>
-                <td style="color:var(--red)">${wcaDeg > 0 ? '+' : ''}${wcaDeg}°</td>
-                <td><b>${Math.round(th).toString().padStart(3,'0')}°</b></td>
-                <td align="right" style="color:var(--accent)">${gs} <small>KT</small></td>
-              </tr>`;
+        h += `<tr><td align="left"><b>${l.n}</b></td><td>${Math.round(l.t)}°</td><td style="color:var(--red)">${wcaDeg>0?'+':''}${wcaDeg}°</td><td><b>${Math.round(th).toString().padStart(3,'0')}°</b></td><td align="right" style="color:var(--accent)">${gs}KT</td></tr>`;
     }); 
     document.getElementById('wcaList').innerHTML = h;
 
     const nav = (navDataDB[currentData.id] && navDataDB[currentData.id][r]) ? navDataDB[currentData.id][r] : null;
-    document.getElementById('navDataTable').innerHTML = nav ? `<tr><td>Ident (${nav.type})</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>Freq</td><td align="right" class="val">${nav.freq} MHz</td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>` : `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
+    if (nav) {
+        // 在顯示頻率時，串接 TACAN Channel 轉換函式
+        const tacanCh = mhzToTacan(nav.freq);
+        document.getElementById('navDataTable').innerHTML = `<tr><td>Ident (${nav.type})</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>Freq</td><td align="right" class="val">${nav.freq} MHz <span style="font-size:0.8rem; color:var(--warn)">${tacanCh}</span></td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>`;
+    } else {
+        document.getElementById('navDataTable').innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
+    }
 }
 
 function transfer() {
