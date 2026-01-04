@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Edition v2.6.1</title>
+    <title>Pocket METAR Pro - Instructor Edition v2.6.2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; --warn: #facc15; }
@@ -57,7 +57,7 @@
             </div>
             <select id="apSelect" onchange="document.getElementById('icaoInput').value=this.value; update()"></select>
         </div>
-        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在載入數據庫...</div></div>
+        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在載入導航數據庫...</div></div>
         
         <div class="card">
             <span class="label-sm">預估建議跑道 EST. RUNWAY</span>
@@ -136,7 +136,7 @@ const groups = [
 
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
-// 精確 CSV 解析器
+// 精確 CSV 解析器 (防止逗點錯位)
 function parseCSVLine(line) {
     const arr = []; let q = false; let c = "";
     for (let i = 0; i < line.length; i++) {
@@ -148,7 +148,7 @@ function parseCSVLine(line) {
     arr.push(c.trim()); return arr;
 }
 
-// TACAN 換算公式 (匹配 MSFS 2020)
+// MHz 轉 TACAN Channel (修正對照公式)
 function mhzToTacan(mhz) {
     const f = parseFloat(mhz); if (isNaN(f)) return "";
     let ch = "";
@@ -170,25 +170,25 @@ const decodeMetarLogic = (raw) => {
     return d.length > 0 ? d.join('\n') : "無特殊天氣現象";
 };
 
-// 【數據校正重點】修正索引與匹配
+// 【數據庫核心修正：修正索引欄位】
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
         const rText = await rRes.text(), nText = await nRes.text();
         const navMap = {}; 
 
-        // 修正：navaids.csv 關聯機場索引應為 17
+        // 1. 處理 Navaids - associated_airport 正確索引應為 17
         nText.split('\n').slice(1).forEach(line => {
             if (!line.trim()) return;
             const c = parseCSVLine(line);
             if (c.length < 18) return;
-            const ident = c[2], type = c[4], rawFreq = parseFloat(c[5]), icao = c[17].toUpperCase();
+            const ident = c[2], name = c[3], type = c[4], rawFreq = parseFloat(c[5]), icao = c[17].toUpperCase();
             const freq = (rawFreq > 500) ? (rawFreq / 1000).toFixed(2) : rawFreq.toFixed(2);
             if (!navMap[icao]) navMap[icao] = [];
-            navMap[icao].push({ ident, type, freq, name: c[3] });
+            navMap[icao].push({ ident, type, freq, name });
         });
 
-        // 修正：runways.csv 航向欄位為 12 和 18
+        // 2. 處理 Runways - le_heading=12, he_heading=18
         rText.split('\n').slice(1).forEach(line => {
             if (!line.trim()) return;
             const c = parseCSVLine(line);
@@ -197,21 +197,21 @@ async function ingestOurAirportsData() {
             if (!navDataDB[icao]) navDataDB[icao] = {};
 
             [ {id: c[8], hdg: c[12]}, {id: c[14], hdg: c[18]} ].forEach(end => {
-                const rId = end.id.trim(); if (!rId) return;
+                const rwyId = end.id.trim(); if (!rwyId) return;
                 const airportNavs = navMap[icao] || [];
-                let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rId) || n.ident.includes(rId.replace(/\D/g,''))));
+                let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.ident.includes(rwyId.replace(/\D/g,''))));
                 if (!matched) matched = airportNavs.find(n => n.type.includes('TACAN') || n.type.includes('VOR'));
 
-                navDataDB[icao][rId] = {
+                navDataDB[icao][rwyId] = {
                     ident: matched ? matched.ident : "N/A",
                     type: matched ? matched.type : "N/A",
                     freq: matched ? matched.freq : "N/A",
-                    crs: end.hdg ? Math.round(parseFloat(end.hdg)).toString().padStart(3,'0') : rId.padStart(2,'0') + "0"
+                    crs: end.hdg ? Math.round(parseFloat(end.hdg)).toString().padStart(3,'0') : rwyId.padStart(2,'0') + "0"
                 };
             });
         });
-        document.getElementById('rawView').innerText = "數據庫已就緒。";
-    } catch (e) { document.getElementById('rawView').innerText = "數據加載跳過。"; }
+        document.getElementById('rawView').innerText = "導航庫已就緒 (RCNN 索引修正版)。";
+    } catch (e) { document.getElementById('rawView').innerText = "數據加載錯誤。"; }
 }
 
 function update() {
@@ -221,22 +221,28 @@ function update() {
         document.getElementById('rawView').innerText = raw.trim();
         const wMatch = raw.match(/(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT/);
         let dir = 0, spd = 0; if (wMatch) { dir = wMatch[1]==="VRB"?0:parseInt(wMatch[1]); spd = parseInt(wMatch[2]); }
+        
         const visMatch = raw.match(/\b\d{4}\b/);
         document.getElementById('visVal').innerText = visMatch ? (visMatch[0]==="9999" ? "10km+" : visMatch[0]+"m") : "N/A";
         const qMatch = raw.match(/Q(\d{4})/);
         const aMatch = raw.match(/A(\d{4})/);
         document.getElementById('qnhVal').innerText = qMatch ? qMatch[1]+" hPa" : (aMatch ? (parseInt(aMatch[1])/100).toFixed(2)+" inHg" : "--");
+        
         const cloudRegex = /(FEW|SCT|BKN|OVC|VV)(\d{3})/g;
         let cMatch, cloudsHtml = "";
         while ((cMatch = cloudRegex.exec(raw)) !== null) {
             cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`;
         }
-        document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear";
+        document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
         document.getElementById('rmkBox').innerText = decodeMetarLogic(raw);
+
         let best = "--", minD = 180;
         for(let r in ap.rwys) { let diff = Math.abs(dir-ap.rwys[r].mag); if(diff>180) diff=360-diff; if(diff<minD){minD=diff; best=r;} }
-        currentData = { id, dir, spd, best };
+        const hw = Math.round(spd * Math.cos(minD*Math.PI/180)), cw = Math.round(spd * Math.sin(minD*Math.PI/180));
+        currentData = { id, dir, spd, best, hw, cw };
+        document.getElementById('estRwy').innerText = best;
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
+        if(best !== "--") drawMapPattern(id, best);
     });
 }
 
@@ -245,6 +251,7 @@ function refreshTab2() {
     const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id];
     const tas = parseInt(document.getElementById('tasInput').value) || 90;
     const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
+    
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${magH-90}deg)`;
     document.getElementById('n1').innerText = r; document.getElementById('n2').innerText = (parseInt(r)>18?parseInt(r)-18:parseInt(r)+18).toString().padStart(2,'0');
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
@@ -277,6 +284,16 @@ function transfer() {
 function setSide(s) { trafficSide = s; document.getElementById('bL').style.background = s === 'L' ? 'var(--accent)' : '#334155'; document.getElementById('bR').style.background = s === 'R' ? 'var(--accent)' : '#334155'; refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
 function manualUpdate() { update(); }
+
+function drawMapPattern(id, rwy) {
+    const ap = airportDB[id]; if(!ap || !ap.rwys[rwy]) return;
+    const s = trafficSide === 'L' ? -1 : 1, tH = ap.rwys[rwy].true;
+    const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
+    const toR = Math.PI / 180, rH = (90 - tH) * toR, rS = (90 - (tH + 90 * s)) * toR;
+    const m = (p, a, d) => [p[0] + Math.sin(a) * d * latF, p[1] + Math.cos(a) * d * lonF];
+    const p1 = m([ap.lat, ap.lon], rH, 1.5), p2 = m([ap.lat, ap.lon], rH, -1.5), p3 = m(p2, rS, 1.2), p4 = m(p1, rS, 1.2);
+    patternOverlay.setLatLngs([p1, p2, p3, p4, p1]);
+}
 
 function init() {
     ingestOurAirportsData();
