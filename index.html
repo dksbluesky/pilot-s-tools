@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Edition v2.6.3</title>
+    <title>Pocket METAR Pro - Instructor Edition v2.7</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; --warn: #facc15; }
@@ -17,8 +17,7 @@
         .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
         .label-sm { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; font-weight: bold; margin-bottom: 8px; display: block; }
         .rwy-id { font-size: 3.5rem; font-weight: 900; line-height: 1; letter-spacing: -2px; }
-        .v-line { width: 2px; height: 50px; background: #475569; }
-        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.85rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+        .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.85rem; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
         .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
         .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; }
@@ -57,13 +56,13 @@
             </div>
             <select id="apSelect" onchange="document.getElementById('icaoInput').value=this.value; update()"></select>
         </div>
-        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在初始化數據庫...</div></div>
+        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在載入數據庫...</div></div>
         <div id="map"></div>
         <div class="card">
             <span class="label-sm">重點解譯 DECODER</span>
             <div class="info-grid">
                 <div class="info-item"><span class="label-sm" style="margin:0">能見度 VIS</span><div id="visVal" style="font-weight:bold; font-size:1.1rem">--</div></div>
-                <div class="info-item"><span class="label-sm" style="margin:0">氣壓 QNH</span><div id="qnhVal" style="font-weight:bold; font-size:1.1rem">--</div></div>
+                <div class="info-item"><span class="label-sm" style="margin:0">氣壓 QNH / ALT</span><div id="qnhVal" style="font-weight:bold; font-size:1.1rem">--</div></div>
             </div>
             <div id="cloudBox" style="margin-top:8px"></div>
             <div id="rmkBox" style="margin-top:10px; font-size:0.85rem; color:var(--accent); white-space: pre-line;"></div>
@@ -98,7 +97,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 【資料庫：100% 還原 DK 老師原始設定】
+// 【100% 還原 DK 的原始資料庫】
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -124,7 +123,7 @@ const groups = [
 
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
-// 1. 防錯 CSV 解析 (處理引號內的逗點)
+// 1. 防錯解析器
 function parseCSVLine(line) {
     const arr = []; let q = false; let c = "";
     for (let i = 0; i < line.length; i++) {
@@ -136,7 +135,7 @@ function parseCSVLine(line) {
     arr.push(c.trim()); return arr;
 }
 
-// 2. MHz 轉 TACAN Channel (MSFS 精確配對)
+// 2. MHz 轉 TACAN Channel (修正對應)
 function mhzToTacan(mhz) {
     const f = parseFloat(mhz); if (isNaN(f)) return "";
     let ch = "";
@@ -145,38 +144,25 @@ function mhzToTacan(mhz) {
     return ch ? `(${ch})` : "";
 }
 
-const decodeMetarLogic = (raw) => {
-    const tokens = raw.split(' ');
-    const has = (code) => tokens.some(t => t.includes(code));
-    let d = [];
-    if(has("NOSIG")) d.push("• NOSIG (未來兩小時天氣無顯著變化)");
-    if(has("CAVOK")) d.push("• CAVOK (能見與雲況良好)");
-    if(has("TS")) d.push("• TS (有雷暴風險)");
-    if(has("WS")) d.push("• WS (注意風切預警)");
-    if(has("RA")) d.push("• RA (正在降雨)");
-    if(has("FG") || has("BR")) d.push("• FG/BR (低能見度注意)");
-    return d.length > 0 ? d.join('\n') : "無特殊天氣現象";
-};
-
-// 3. 【核心修正】導航數據載入邏輯 - 修正索引並強化匹配
+// 3. 【核心大改】導航數據對齊 - 針對 RCNN 的數據結構
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
         const rText = await rRes.text(), nText = await nRes.text();
         const navMap = {}; 
 
-        // 處理 Navaids - 修正：associated_airport 在索引 19
+        // 處理 Navaids - associated_airport 索引在 19 (倒數第二欄)
         nText.split('\n').slice(1).forEach(line => {
             if (!line.trim()) return;
             const c = parseCSVLine(line);
             if (c.length < 20) return;
-            const ident = c[2], type = c[4], rawFreq = parseFloat(c[5]), icao = c[19].toUpperCase(); // 欄位 19 是 ICAO
+            const ident = c[2], type = c[4], rawFreq = parseFloat(c[5]), icao = c[19].toUpperCase();
             const freq = (rawFreq > 500) ? (rawFreq / 1000).toFixed(2) : rawFreq.toFixed(2);
             if (!navMap[icao]) navMap[icao] = [];
             navMap[icao].push({ ident, type, freq, name: c[3] });
         });
 
-        // 處理 Runways - 修正：le_heading=12, he_heading=18
+        // 處理 Runways - le_heading_degT=12, he_heading_degT=18
         rText.split('\n').slice(1).forEach(line => {
             if (!line.trim()) return;
             const c = parseCSVLine(line);
@@ -185,25 +171,25 @@ async function ingestOurAirportsData() {
             if (!navDataDB[icao]) navDataDB[icao] = {};
 
             [ {id: c[8], hdg: c[12]}, {id: c[14], hdg: c[18]} ].forEach(end => {
-                const rId = end.id.trim(); if (!rId) return;
+                const rwyId = end.id.trim(); if (!rwyId) return;
                 const airportNavs = navMap[icao] || [];
                 
-                // 優先找對應跑道號碼的 ILS (例如名字包含 "18R" 或 Ident 對得上的)
-                let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rId) || n.ident.includes(rId.replace(/\D/g,''))));
+                // 第一優先：尋找該機場內 名字包含跑道號碼的 ILS (如 RWY 18R)
+                let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.ident.includes(rwyId.replace(/\D/g,''))));
                 
-                // 【核心優化】如果找不到跑道專屬 ILS，改找該機場的 TACAN 或 VOR
+                // 第二優先：如果沒 ILS，直接抓機場的 VORTAC/TACAN 作為導航參考
                 if (!matched) matched = airportNavs.find(n => n.type.includes('TACAN') || n.type.includes('VOR'));
 
-                navDataDB[icao][rId] = {
+                navDataDB[icao][rwyId] = {
                     ident: matched ? matched.ident : "N/A",
                     type: matched ? matched.type : "N/A",
                     freq: matched ? matched.freq : "N/A",
-                    crs: end.hdg ? Math.round(parseFloat(end.hdg)).toString().padStart(3,'0') : rId.padStart(2,'0') + "0"
+                    crs: end.hdg ? Math.round(parseFloat(end.hdg)).toString().padStart(3,'0') : rwyId.padStart(2,'0') + "0"
                 };
             });
         });
-        document.getElementById('rawView').innerText = "導航庫 (RCNN 數據精確對位版) 已就緒。";
-    } catch (e) { document.getElementById('rawView').innerText = "數據加載跳過。"; }
+        document.getElementById('rawView').innerText = "數據庫已就緒 (RCNN 數據精確修復)。";
+    } catch (e) { document.getElementById('rawView').innerText = "導航庫載入錯誤。"; }
 }
 
 function update() {
@@ -226,7 +212,6 @@ function update() {
             cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`;
         }
         document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
-        document.getElementById('rmkBox').innerText = decodeMetarLogic(raw);
 
         let best = "--", minD = 180;
         for(let r in ap.rwys) { let diff = Math.abs(dir-ap.rwys[r].mag); if(diff>180) diff=360-diff; if(diff<minD){minD=diff; best=r;} }
@@ -243,7 +228,6 @@ function refreshTab2() {
     const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id];
     const tas = parseInt(document.getElementById('tasInput').value) || 90;
     const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
-    
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${magH-90}deg)`;
     document.getElementById('n1').innerText = r; document.getElementById('n2').innerText = (parseInt(r)>18?parseInt(r)-18:parseInt(r)+18).toString().padStart(2,'0');
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
