@@ -128,7 +128,11 @@ const airportDB = {
     "KLAX": { name: "洛杉磯 L.A.", lat: 33.9416, lon: -118.4085, rwys: { "24L": {mag:251, true:263}, "25R": {mag:251, true:263} } }
 };
 
-const groups = [{ label: "🇹🇼 台灣機場", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] }, { label: "🌏 亞太地區", ids: ["VHHH", "RKSI", "RJTT"] }];
+const groups = [
+    { label: "🇹🇼 台灣 Taiwan", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] },
+    { label: "🌏 亞太 Asia-Pacific", ids: ["VHHH", "VMMC", "WSSS", "RKSI", "RJTT"] },
+    { label: "🇺🇸 歐美 Global", ids: ["KJFK", "KLAX"] }
+];
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
 // 【重點修正：導航資料載入與匹配】
