@@ -25,20 +25,20 @@
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; transition: transform 0.8s ease; }
         #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #111; border: 1px solid #444; }
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
-        .input-group input { flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; font-weight: bold; text-transform: uppercase; }
-        .input-group button { padding: 0 20px; background: var(--accent); color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        input { flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; font-weight: bold; text-transform: uppercase; }
+        .query-btn { padding: 0 20px; background: var(--accent); color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; }
         .side-toggle { display: flex; gap: 8px; margin-top: 10px; }
         .side-toggle button { flex: 1; padding: 12px; border-radius: 8px; background: #334155; color: white; font-weight: bold; cursor: pointer; border: none; }
         .side-toggle button.active { background: #f59e0b; color: #000; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-        .info-item { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border-left: 3px solid #475569; }
-        .cloud-item { display: flex; justify-content: space-between; background: rgba(56, 189, 248, 0.1); padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--accent); margin-bottom: 4px; }
         .calc-row { display: flex; gap: 10px; flex-wrap: wrap; }
         .calc-row .card { flex: 1; min-width: 250px; margin-bottom: 0; }
         .nav-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
         .nav-table td { padding: 10px 5px; border-bottom: 1px solid #334151; }
         .nav-table .val { color: var(--accent); font-weight: bold; font-family: 'Consolas', monospace; }
+        .cloud-item { display: flex; justify-content: space-between; background: rgba(56, 189, 248, 0.1); padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--accent); margin-bottom: 4px; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .info-item { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border-left: 3px solid #475569; }
     </style>
 </head>
 <body>
@@ -54,11 +54,12 @@
             <span class="label-sm">ICAO 手動輸入 / 選取</span>
             <div class="input-group">
                 <input type="text" id="icaoInput" placeholder="例如: RCTP" maxlength="4">
-                <button onclick="manualUpdate()">查詢</button>
+                <button class="query-btn" onclick="manualUpdate()">查詢</button>
             </div>
             <select id="apSelect" onchange="document.getElementById('icaoInput').value=this.value; update()"></select>
         </div>
         <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在加載導航數據...</div></div>
+        
         <div class="card">
             <span class="label-sm">預估跑道 EST. RUNWAY</span>
             <div style="display:flex; align-items:center; gap:20px;">
@@ -104,7 +105,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// --- 原有機場資料庫 (教官原始版) ---
+// --- 完全還原教官機場資料庫 (含 KLAX, RKSI) ---
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -117,62 +118,60 @@ const airportDB = {
     "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": {mag:160, true:158}, "34": {mag:340, true:338} } },
     "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L": {mag:20, true:20}, "20R": {mag:200, true:200} } },
     "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": {mag:337, true:330}, "16R": {mag:157, true:150} } },
-    "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L": {mag:44, true:57}, "22R": {mag:224, true:237} } }
+    "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15R": {mag:153, true:145}, "33L": {mag:333, true:325} } },
+    "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L": {mag:44, true:57}, "22R": {mag:224, true:237} } },
+    "KLAX": { name: "洛杉磯 L.A.", lat: 33.9416, lon: -118.4085, rwys: { "24L": {mag:251, true:263}, "06R": {mag:71, true:83} } }
 };
-
 const groups = [
     { label: "🇹🇼 台灣 Taiwan", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] },
-    { label: "🌏 港澳/中國 East Asia", ids: ["VHHH", "VMMC"] },
-    { label: "JPKR 日本/韓國 Japan/Korea", ids: ["RJTT"] },
+    { label: "🌏 港澳/首爾 East Asia", ids: ["VHHH", "VMMC", "RKSI"] },
+    { label: "JP 日本 Japan", ids: ["RJTT"] },
     { label: "🌴 東南亞 SE Asia", ids: ["WSSS"] },
-    { label: "USEU 歐美 US/EU", ids: ["KJFK"] }
+    { label: "USEU 歐美 US/EU", ids: ["KJFK", "KLAX"] }
 ];
 
-let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
+let navDataDB = {}, map, marker, patternOverlay, currentData = null, trafficSide = 'L';
 
-// CSV 解析邏輯
 function parseCSVLine(line) {
     const result = []; let cur = '', inQuote = false;
     for (let char of line) { if (char === '"') inQuote = !inQuote; else if (char === ',' && !inQuote) { result.push(cur.trim()); cur = ''; } else cur += char; }
     result.push(cur.trim()); return result;
 }
 
-// 併合引擎 (終極強化版)
+// 併合引擎 (深度優化匹配邏輯)
 async function ingestOurAirportsData() {
     try {
-        const [rwyRes, navRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
-        if (!rwyRes.ok || !navRes.ok) throw new Error();
-        const rwyText = await rwyRes.text(), navText = await navRes.text(), navMap = {};
-        navText.split('\n').slice(1).forEach(line => {
-            const cols = parseCSVLine(line); if (cols.length < 20) return;
-            const type = cols[4].replace(/"/g,''), icao = cols[19].trim().replace(/"/g,'');
+        const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
+        const rText = await rRes.text(), nText = await nRes.text(), navMap = {};
+        nText.split('\n').slice(1).forEach(line => {
+            const c = parseCSVLine(line); if (c.length < 20) return;
+            const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'');
             if (type.includes('ILS') || type.includes('TACAN') || type.includes('DME')) {
                 if (!navMap[icao]) navMap[icao] = [];
-                navMap[icao].push({ type, ident: cols[2].replace(/"/g,''), name: cols[3].replace(/"/g,''), freq: cols[5], chan: cols[11].replace(/"/g,'') });
+                navMap[icao].push({ type, ident: c[2].replace(/"/g,''), name: c[3].replace(/"/g,''), freq: c[5], chan: c[11].replace(/"/g,'') });
             }
         });
-        rwyText.split('\n').slice(1).forEach(line => {
-            const cols = parseCSVLine(line); if (cols.length < 13) return;
-            const icao = cols[2].replace(/"/g,''), rwyId = cols[8].replace(/"/g,''), trueCrs = cols[12].replace(/"/g,'');
+        rText.split('\n').slice(1).forEach(line => {
+            const c = parseCSVLine(line); if (c.length < 13) return;
+            const icao = c[2].replace(/"/g,''), rwyId = c[8].replace(/"/g,''), trueCrs = c[12].replace(/"/g,'');
             if (icao && rwyId) {
                 if (!navDataDB[icao]) navDataDB[icao] = {};
                 const navs = navMap[icao] || [];
-                const rwyNum = rwyId.replace(/\D/g,''); // 05L -> 05
-                // 優化搜尋：比對跑道編號或純數字
-                const ilsMatch = navs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.name.includes(rwyNum) || n.ident.includes(rwyId)));
-                const tacanMatch = navs.find(n => n.type.includes('TACAN') || (n.type.includes('DME') && n.chan !== ""));
-                let fVal = "N/A"; if(ilsMatch) { let f = parseFloat(ilsMatch.freq); fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); }
-                navDataDB[icao][rwyId] = { ident: ilsMatch ? ilsMatch.ident : "N/A", ils: fVal, crs: trueCrs || rwyId+"0", tacan: tacanMatch ? tacanMatch.chan : "N/A" };
+                const rNum = rwyId.replace(/\D/g,''); 
+                // 強化模糊匹配：檢查名稱是否包含跑道數字 或 識別碼是否包含跑道號
+                const ils = navs.find(n => n.type.includes('ILS') && (n.name.includes(rNum) || n.ident.includes(rNum)));
+                const tacan = navs.find(n => (n.type.includes('TACAN') || n.type.includes('DME')) && n.chan !== "");
+                let fVal = "N/A"; if(ils) { let f = parseFloat(ils.freq); fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); }
+                navDataDB[icao][rwyId] = { ident: ils ? ils.ident : "N/A", ils: fVal, crs: trueCrs || rwyId+"0", tacan: tacan ? tacan.chan : "N/A" };
             }
         });
         console.log("併合完成！", navDataDB);
-        document.getElementById('rawView').innerText = "數據庫已就緒。";
+        document.getElementById('rawView').innerText = "導航庫已就緒。";
     } catch (e) { console.error("CSV Error"); }
 }
 
 async function update() {
-    const id = document.getElementById('icaoInput').value.toUpperCase();
-    if (!id) return;
+    const id = document.getElementById('icaoInput').value.toUpperCase(); if (!id) return;
     const ap = airportDB[id] || { name: id, lat: 25.07, lon: 121.23, rwys: {} };
     document.getElementById('rawView').innerText = `Fetching ${id} METAR...`;
     try {
@@ -189,7 +188,7 @@ async function update() {
         let cMatch, cloudsHtml = ""; while ((cMatch = cloudRegex.exec(raw)) !== null) { cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`; }
         document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
 
-        // --- 完全還原教官原版 Decoder (一字不差) ---
+        // --- 完全還原教官原版 Decoder (包含详细中文注释) ---
         let dText = "";
         dText += raw.includes("NOSIG") ? "NOSIG (未來兩小時天氣無顯著變化)\n" : "";
         dText += raw.includes("BECMG") ? "BECMG (逐漸轉變中)\n" : "";
@@ -245,11 +244,11 @@ function init() {
 
 function drawMapPattern(id, rwy) {
     const ap = airportDB[id]; if(!ap || !ap.rwys[rwy]) return;
-    const s = trafficSide === 'L' ? -1 : 1, trueHdg = ap.rwys[rwy].true;
+    const s = trafficSide === 'L' ? -1 : 1, tH = ap.rwys[rwy].true;
     const latF = 1 / 60, lonF = latF / Math.cos(ap.lat * Math.PI / 180);
-    const toRad = Math.PI / 180, rH = (90 - trueHdg) * toRad, rS = (90 - (trueHdg + 90 * s)) * toRad;
-    const move = (p, ang, dist) => [p[0] + Math.sin(ang) * dist * latF, p[1] + Math.cos(ang) * dist * lonF];
-    const p1 = move([ap.lat, ap.lon], rH, 1.5), p2 = move([ap.lat, ap.lon], rH, -1.5), p3 = move(p2, rS, 1.2), p4 = move(p1, rS, 1.2);
+    const toR = Math.PI / 180, rH = (90 - tH) * toR, rS = (90 - (tH + 90 * s)) * toR;
+    const m = (p, a, d) => [p[0] + Math.sin(a) * d * latF, p[1] + Math.cos(a) * d * lonF];
+    const p1 = m([ap.lat, ap.lon], rH, 1.5), p2 = m([ap.lat, ap.lon], rH, -1.5), p3 = m(p2, rS, 1.2), p4 = m(p1, rS, 1.2);
     patternOverlay.setLatLngs([p1, p2, p3, p4, p1]);
 }
 
