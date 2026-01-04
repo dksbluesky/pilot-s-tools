@@ -25,12 +25,9 @@
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; transition: transform 0.8s ease; }
         #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #111; border: 1px solid #444; }
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
-        input { flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; font-weight: bold; text-transform: uppercase; }
-        .query-btn { padding: 0 20px; background: var(--accent); color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .input-group input { flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; font-weight: bold; text-transform: uppercase; }
+        .input-group button { padding: 0 20px; background: var(--accent); color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; }
-        .side-toggle { display: flex; gap: 8px; margin-top: 10px; }
-        .side-toggle button { flex: 1; padding: 12px; border-radius: 8px; background: #334155; color: white; font-weight: bold; cursor: pointer; border: none; }
-        .side-toggle button.active { background: #f59e0b; color: #000; }
         .calc-row { display: flex; gap: 10px; flex-wrap: wrap; }
         .calc-row .card { flex: 1; min-width: 250px; margin-bottom: 0; }
         .nav-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
@@ -54,12 +51,11 @@
             <span class="label-sm">ICAO 手動輸入 / 選取</span>
             <div class="input-group">
                 <input type="text" id="icaoInput" placeholder="例如: RCTP" maxlength="4">
-                <button class="query-btn" onclick="manualUpdate()">查詢</button>
+                <button onclick="manualUpdate()">查詢</button>
             </div>
             <select id="apSelect" onchange="document.getElementById('icaoInput').value=this.value; update()"></select>
         </div>
-        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在初始化導航數據庫...</div></div>
-        
+        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在讀取導航 CSV 數據...</div></div>
         <div class="card">
             <span class="label-sm">預估跑道 EST. RUNWAY</span>
             <div style="display:flex; align-items:center; gap:20px;">
@@ -105,7 +101,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// --- 還原教官完整機場資料庫 ---
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -130,16 +125,15 @@ const groups = [
     { label: "USEU 歐美 US/EU", ids: ["KJFK", "KLAX"] }
 ];
 
-let navDataDB = {}, map, marker, patternOverlay, currentData = null, trafficSide = 'L';
+let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
-// CSV 解析邏輯 (修正引號問題)
 function parseCSVLine(line) {
     const result = []; let cur = '', inQuote = false;
     for (let char of line) { if (char === '"') inQuote = !inQuote; else if (char === ',' && !inQuote) { result.push(cur.trim()); cur = ''; } else cur += char; }
     result.push(cur.trim()); return result;
 }
 
-// 併合引擎：針對匹配邏輯深度優化 (包含處理 \r 換行符)
+// 核心併合引擎：徹底修正匹配邏輯
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
@@ -158,8 +152,8 @@ async function ingestOurAirportsData() {
             if (icao && rwyId) {
                 if (!navDataDB[icao]) navDataDB[icao] = {};
                 const navs = navMap[icao] || [];
-                const rNum = rwyId.replace(/\D/g,''); // 取數字部，如 05L -> 05
-                // 優化匹配：比對跑道數字且是 ILS
+                const rNum = rwyId.replace(/\D/g,''); // 05L -> 05
+                // 模糊配對邏輯：名稱或識別碼包含跑道數字且是 ILS
                 const ils = navs.find(n => n.type.includes('ILS') && (n.name.includes(rNum) || n.ident.includes(rNum)));
                 const tacan = navs.find(n => (n.type.includes('TACAN') || n.type.includes('DME')) && n.chan !== "");
                 let fVal = "N/A"; if(ils) { let f = parseFloat(ils.freq); fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); }
@@ -167,7 +161,7 @@ async function ingestOurAirportsData() {
             }
         });
         console.log("併合完成！", navDataDB);
-        document.getElementById('rawView').innerText = "導航數據併合完成，請選取機場。";
+        document.getElementById('rawView').innerText = "導航庫已就緒。";
     } catch (e) { console.error("CSV Error"); }
 }
 
@@ -189,7 +183,7 @@ async function update() {
         let cMatch, cloudsHtml = ""; while ((cMatch = cloudRegex.exec(raw)) !== null) { cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`; }
         document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
 
-        // --- 完全還原教官原版最詳細 Decoder 邏輯 ---
+        // --- 完全還原教官原版 Decoder (包含詳細中文翻譯) ---
         let dText = "";
         dText += raw.includes("NOSIG") ? "NOSIG (未來兩小時天氣無顯著變化)\n" : "";
         dText += raw.includes("BECMG") ? "BECMG (逐漸轉變中)\n" : "";
