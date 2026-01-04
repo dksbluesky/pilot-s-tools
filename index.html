@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Instructor Edition v2.3.1</title>
+    <title>Pocket METAR Pro - Instructor Edition v2.3.2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; --warn: #facc15; }
@@ -110,7 +110,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// 【資料庫保持完整】
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -123,7 +122,7 @@ const airportDB = {
     "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": {mag:160, true:158}, "34": {mag:340, true:338} } },
     "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L": {mag:20, true:20}, "20R": {mag:200, true:200} } },
     "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15R": {mag:153, true:145}, "33L": {mag:333, true:325} } },
-    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": {mag:337, true:330}, "34R": {mag:337, true:330}, "16L": {mag:157, true:150}, "16R": {mag:157, true:150} } }, // 這裡原本漏掉逗點
+    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": {mag:337, true:330}, "34R": {mag:337, true:330}, "16L": {mag:157, true:150}, "16R": {mag:157, true:150} } },
     "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L": {mag:44, true:57}, "22R": {mag:224, true:237} } },
     "KLAX": { name: "洛杉磯 L.A.", lat: 33.9416, lon: -118.4085, rwys: { "24L": {mag:251, true:263}, "25R": {mag:251, true:263} } }
 };
@@ -135,39 +134,44 @@ const groups = [
 ];
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
-// 【重點修正：導航資料載入與頻率單位匹配】
+const decodeMetarLogic = (raw) => {
+    const tokens = raw.split(' ');
+    const has = (code) => tokens.some(t => t.includes(code));
+    let d = [];
+    if(has("NOSIG")) d.push("• NOSIG (未來兩小時天氣無顯著變化)");
+    if(has("CAVOK")) d.push("• CAVOK (能見與雲況良好)");
+    if(has("TS")) d.push("• TS (有雷暴風險)");
+    if(has("WS")) d.push("• WS (注意風切預警)");
+    if(has("RA")) d.push("• RA (正在降雨)");
+    if(has("FG") || has("BR")) d.push("• FG/BR (低能見度注意)");
+    return d.length > 0 ? d.join('\n') : "無特殊天氣現象";
+};
+
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
         const rText = await rRes.text(), nText = await nRes.text();
         const navMap = {}; 
-
         nText.split('\n').slice(1).forEach(line => {
             const c = line.split(','); if (c.length < 20) return;
             const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'').toUpperCase();
             const ident = c[2].replace(/"/g,''), rawFreq = parseFloat(c[5].replace(/"/g,'')), name = c[3].replace(/"/g,'');
-            
-            // 修正頻率單位邏輯： OurAirports 中 ILS 多為 MHz (例如 110.3), NDB 為 kHz (例如 300)
             const freq = (rawFreq > 500) ? (rawFreq / 1000).toFixed(2) : rawFreq.toFixed(2);
-
             if (['ILS', 'TACAN', 'VOR-DME', 'DME', 'NDB'].some(t => type.includes(t))) {
                 if (!navMap[icao]) navMap[icao] = [];
                 navMap[icao].push({ ident, type, freq, name });
             }
         });
-
         rText.split('\n').slice(1).forEach(line => {
             const c = line.split(','); if (c.length < 15) return;
             const icao = c[2].replace(/"/g,'').trim().toUpperCase();
             if (!navDataDB[icao]) navDataDB[icao] = {};
-
             [ {id: c[8], hdg: c[11]}, {id: c[14], hdg: c[17]} ].forEach(end => {
                 const rwyId = end.id.replace(/"/g,'').trim();
                 if (!rwyId) return;
                 const airportNavs = navMap[icao] || [];
                 let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.ident.includes(rwyId.replace(/\D/g,''))));
                 if (!matched) matched = airportNavs.find(n => n.type.includes('TACAN') || n.type.includes('VOR'));
-
                 navDataDB[icao][rwyId] = {
                     ident: matched ? matched.ident : "N/A",
                     type: matched ? matched.type : "",
@@ -176,7 +180,7 @@ async function ingestOurAirportsData() {
                 };
             });
         });
-        document.getElementById('rawView').innerText = "導航庫 (ILS/TACAN) 已就緒。";
+        document.getElementById('rawView').innerText = "導航庫已就緒。";
     } catch (e) { document.getElementById('rawView').innerText = "導航庫載入失敗。"; }
 }
 
@@ -185,16 +189,42 @@ function update() {
     const ap = airportDB[id] || { name: id, lat: 25.07, lon: 121.23, rwys: {} };
     fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`).then(r => r.text()).then(raw => {
         document.getElementById('rawView').innerText = raw.trim();
+        
+        // 1. 風向風速解析
         const wMatch = raw.match(/(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT/);
         let dir = 0, spd = 0; if (wMatch) { dir = wMatch[1]==="VRB"?0:parseInt(wMatch[1]); spd = parseInt(wMatch[2]); }
+        
+        // 2. 能見度解析
+        const visMatch = raw.match(/\b\d{4}\b/);
+        document.getElementById('visVal').innerText = visMatch ? (visMatch[0]==="9999" ? "10km+" : visMatch[0]+"m") : "N/A";
+        
+        // 3. 氣壓解析 (QNH / Altimeter)
+        const qMatch = raw.match(/Q(\d{4})/);
+        const aMatch = raw.match(/A(\d{4})/);
+        document.getElementById('qnhVal').innerText = qMatch ? qMatch[1]+" hPa" : (aMatch ? (parseInt(aMatch[1])/100).toFixed(2)+" inHg" : "--");
+
+        // 4. 雲層解析
+        const cloudRegex = /(FEW|SCT|BKN|OVC|VV)(\d{3})/g;
+        let cMatch, cloudsHtml = "";
+        while ((cMatch = cloudRegex.exec(raw)) !== null) {
+            cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`;
+        }
+        document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
+
+        // 5. 解譯重點
+        document.getElementById('rmkBox').innerText = decodeMetarLogic(raw);
+
+        // 6. 跑道與風力計算
         let best = "--", minD = 180;
         for(let r in ap.rwys) { let diff = Math.abs(dir-ap.rwys[r].mag); if(diff>180) diff=360-diff; if(diff<minD){minD=diff; best=r;} }
         const hw = Math.round(spd * Math.cos(minD*Math.PI/180)), cw = Math.round(spd * Math.sin(minD*Math.PI/180));
         currentData = { id, dir, spd, best, hw, cw };
+        
         document.getElementById('estRwy').innerText = best;
         document.getElementById('hWind').innerText = hw;
         document.getElementById('cWind').innerText = cw;
         document.getElementById('cWind').className = cw > 15 ? "warn-text" : "";
+        
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         if(best !== "--") drawMapPattern(id, best);
     });
@@ -216,7 +246,6 @@ function refreshTab2() {
         h += `<tr><td style="padding:10px">${l.n}</td><td align="center">${l.t}°</td><td align="center" style="color:var(--red)">${wca>0?'+':''}${wca}°</td><td align="right"><b>${((l.t+wca+360)%360).toString().padStart(3,'0')}°</b></td></tr>`;
     }); 
     document.getElementById('wcaList').innerHTML = h;
-
     const nav = (navDataDB[currentData.id] && navDataDB[currentData.id][r]) ? navDataDB[currentData.id][r] : null;
     document.getElementById('navDataTable').innerHTML = nav ? `<tr><td>Ident (${nav.type})</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>Freq</td><td align="right" class="val">${nav.freq} MHz</td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>` : `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
 }
@@ -253,7 +282,6 @@ function init() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     marker = L.marker([25.0697, 121.5525]).addTo(map);
     patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
-    
     const svg = document.getElementById('compSvg'), lbls = { 0:'N', 90:'E', 180:'S', 270:'W' };
     let ticks = ''; for(let i=0; i<360; i+=10) {
         let isL = i % 30 === 0, x1 = 100 + Math.sin(i*Math.PI/180)*(isL?82:88), y1 = 100 - Math.cos(i*Math.PI/180)*(isL?82:88);
