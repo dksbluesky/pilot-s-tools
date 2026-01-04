@@ -58,7 +58,7 @@
             </div>
             <select id="apSelect" onchange="document.getElementById('icaoInput').value=this.value; update()"></select>
         </div>
-        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在初始化導航數據庫...</div></div>
+        <div class="card"><span class="label-sm">原始電碼 RAW DATA</span><div id="rawView" class="raw-text">正在加載導航數據...</div></div>
         <div class="card">
             <span class="label-sm">預估跑道 EST. RUNWAY</span>
             <div style="display:flex; align-items:center; gap:20px;">
@@ -104,7 +104,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// --- 原有機場資料庫 (教官原始完整版) ---
+// --- 原有機場資料庫 (教官原始版) ---
 const airportDB = {
     "RCTP": { name: "桃園 Taoyuan", lat: 25.0797, lon: 121.2342, rwys: { "05L": {mag:52, true:48.8}, "05R": {mag:52, true:48.8}, "23L": {mag:232, true:228.8}, "23R": {mag:232, true:228.8} } },
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
@@ -128,7 +128,7 @@ const groups = [
     { label: "USEU 歐美 US/EU", ids: ["KJFK"] }
 ];
 
-let navDataDB = {}, map, marker, patternOverlay, currentData = null, trafficSide = 'L';
+let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
 // CSV 解析邏輯
 function parseCSVLine(line) {
@@ -137,7 +137,7 @@ function parseCSVLine(line) {
     result.push(cur.trim()); return result;
 }
 
-// 併合引擎 (優化配對邏輯)
+// 併合引擎 (終極強化版)
 async function ingestOurAirportsData() {
     try {
         const [rwyRes, navRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
@@ -157,16 +157,16 @@ async function ingestOurAirportsData() {
             if (icao && rwyId) {
                 if (!navDataDB[icao]) navDataDB[icao] = {};
                 const navs = navMap[icao] || [];
-                const rwyNum = rwyId.replace(/\D/g,''); // 抓取跑道數字，如 05L -> 05
-                // 優化 ILS 搜尋：包含跑道 ID 或 跑道純數字
+                const rwyNum = rwyId.replace(/\D/g,''); // 05L -> 05
+                // 優化搜尋：比對跑道編號或純數字
                 const ilsMatch = navs.find(n => n.type.includes('ILS') && (n.name.includes(rwyId) || n.name.includes(rwyNum) || n.ident.includes(rwyId)));
                 const tacanMatch = navs.find(n => n.type.includes('TACAN') || (n.type.includes('DME') && n.chan !== ""));
-                let fStr = "N/A"; if(ilsMatch) { let f = parseFloat(ilsMatch.freq); fStr = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); }
-                navDataDB[icao][rwyId] = { ident: ilsMatch ? ilsMatch.ident : "N/A", ils: fStr, crs: trueCrs || rwyId+"0", tacan: tacanMatch ? tacanMatch.chan : "N/A" };
+                let fVal = "N/A"; if(ilsMatch) { let f = parseFloat(ilsMatch.freq); fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); }
+                navDataDB[icao][rwyId] = { ident: ilsMatch ? ilsMatch.ident : "N/A", ils: fVal, crs: trueCrs || rwyId+"0", tacan: tacanMatch ? tacanMatch.chan : "N/A" };
             }
         });
-        console.log("併合完成！");
-        document.getElementById('rawView').innerText = "導航庫已就緒。";
+        console.log("併合完成！", navDataDB);
+        document.getElementById('rawView').innerText = "數據庫已就緒。";
     } catch (e) { console.error("CSV Error"); }
 }
 
@@ -189,7 +189,7 @@ async function update() {
         let cMatch, cloudsHtml = ""; while ((cMatch = cloudRegex.exec(raw)) !== null) { cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`; }
         document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
 
-        // --- 完全還原教官要求之 Decoder (精確解譯) ---
+        // --- 完全還原教官原版 Decoder (一字不差) ---
         let dText = "";
         dText += raw.includes("NOSIG") ? "NOSIG (未來兩小時天氣無顯著變化)\n" : "";
         dText += raw.includes("BECMG") ? "BECMG (逐漸轉變中)\n" : "";
