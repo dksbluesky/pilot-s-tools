@@ -268,29 +268,76 @@ function transfer() {
 function setSide(s) { trafficSide = s; document.getElementById('bL').style.background = s === 'L' ? 'var(--accent)' : '#334155'; document.getElementById('bR').style.background = s === 'R' ? 'var(--accent)' : '#334155'; refreshTab2(); }
 function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
 
+// --- 核心併合引擎：修正版 ---
 async function ingestOurAirportsData() {
     try {
         const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
         const rText = await rRes.text(), nText = await nRes.text(), navMap = {};
+
+        // 1. 先處理導航台 (Navaids)
         nText.split('\n').slice(1).forEach(line => {
-            const c = line.split(','); if (c.length < 20) return;
+            const c = parseCSVLine(line); if (c.length < 20) return;
             const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'').toUpperCase();
-            if (type.includes('ILS')) {
+            if (type.includes('ILS') || type.includes('TACAN') || type.includes('DME')) {
                 if (!navMap[icao]) navMap[icao] = [];
-                navMap[icao].push({ ident: c[2].replace(/"/g,''), freq: c[5] });
+                navMap[icao].push({ 
+                    type, 
+                    ident: c[2].replace(/"/g,''), 
+                    name: c[3].replace(/"/g,''), 
+                    freq: c[5], 
+                    chan: c[11].replace(/"/g,'') 
+                });
             }
         });
+
+        // 2. 處理跑道並與導航台配對 (Runways)
         rText.split('\n').slice(1).forEach(line => {
-            const c = line.split(','); if (c.length < 13) return;
-            const icao = c[2].replace(/"/g,'').trim().toUpperCase(), rwyId = c[8].replace(/"/g,'').trim();
-            if (icao && rwyId) {
-                if (!navDataDB[icao]) navDataDB[icao] = {};
-                const ils = (navMap[icao] || []).find(n => n.ident.includes(rwyId.replace(/\D/g,'')));
-                navDataDB[icao][rwyId] = { ident: ils?ils.ident:"N/A", ils: ils?parseFloat(ils.freq).toFixed(2):"N/A", crs: rwyId+"0" };
+            const c = parseCSVLine(line); if (c.length < 13) return;
+            const icao = c[2].replace(/"/g,'').trim().toUpperCase();
+            if (!icao) return;
+            if (!navDataDB[icao]) navDataDB[icao] = {};
+
+            const navs = navMap[icao] || [];
+
+            // 輔助函數：幫特定跑道號碼找 ILS
+            const findILS = (rID) => {
+                const rNum = rID.replace(/\D/g,'');
+                const ils = navs.find(n => n.type.includes('ILS') && (n.name.includes(rNum) || n.ident.includes(rNum)));
+                const tacan = navs.find(n => (n.type.includes('TACAN') || n.type.includes('DME')) && n.chan !== "");
+                let fVal = "N/A"; 
+                if(ils) { 
+                    let f = parseFloat(ils.freq); 
+                    fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); 
+                }
+                return { 
+                    ident: ils ? ils.ident : "N/A", 
+                    ils: fVal, 
+                    tacan: tacan ? tacan.chan : "N/A" 
+                };
+            };
+
+            // --- 修正重點：同時處理跑道兩頭 ---
+            // Low End (例如 05L)
+            const leID = c[8].replace(/"/g,'').trim();
+            if(leID) {
+                const data = findILS(leID);
+                navDataDB[icao][leID] = { ...data, crs: c[12] || leID+"0" };
+            }
+
+            // High End (例如 23R) - 這是你原本漏掉的
+            if(c.length > 14) {
+                const heID = c[14].replace(/"/g,'').trim();
+                if(heID) {
+                    const data = findILS(heID);
+                    navDataDB[icao][heID] = { ...data, crs: c[18] || heID+"0" };
+                }
             }
         });
+        console.log("併合完成！", navDataDB);
         document.getElementById('rawView').innerText = "導航數據庫已就緒。";
-    } catch (e) { document.getElementById('rawView').innerText = "導航庫讀取失敗 (本地測試請忽略)"; }
+    } catch (e) { 
+        console.error("CSV Error", e); 
+    }
 }
 
 function drawMapPattern(id, rwy) {
