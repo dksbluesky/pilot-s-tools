@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket METAR Pro - Ultimate Integration</title>
+    <title>Pocket METAR Pro - Instructor Edition v2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; }
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --dim: #94a3b8; --green: #4ade80; --red: #fb7185; --warn: #facc15; }
         body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; }
         .container { max-width: 650px; margin: 0 auto; }
         .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
@@ -21,13 +21,13 @@
         .raw-text { font-family: 'Consolas', monospace; color: var(--green); font-size: 0.85rem; line-height: 1.4; background: #000; padding: 10px; border-radius: 6px; border-left: 4px solid var(--green); margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
         .compass-wrap { position: relative; width: 260px; height: 260px; margin: 15px auto; border-radius: 50%; background: #1a365d; border: 2px solid #334155; }
         .rwy-bar { position: absolute; top: 50%; left: 50%; width: 160px; height: 20px; background: #111; border: 1.5px solid #fff; transform: translate(-50%, -50%); z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; border-radius: 3px; }
-        .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; transition: transform 0.3s; }
+        .rwy-num { display: inline-block; color: white; font-size: 11px; font-weight: bold; font-family: monospace; }
         .wind-ptr { position: absolute; top: 50%; left: 50%; width: 0; height: 0; transform-origin: center center; z-index: 20; transition: transform 0.8s ease; }
         #map { height: 260px; border-radius: 12px; margin-top: 10px; background: #111; border: 1px solid #444; }
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
         .input-group input { flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; font-weight: bold; text-transform: uppercase; }
         .input-group button { padding: 0 20px; background: var(--accent); color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        select { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; }
+        select, .tas-input { width: 100%; padding: 14px; background: #334155; color: white; border: none; border-radius: 8px; font-size: 1rem; box-sizing: border-box; }
         .calc-row { display: flex; gap: 10px; flex-wrap: wrap; }
         .calc-row .card { flex: 1; min-width: 250px; margin-bottom: 0; }
         .nav-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
@@ -36,6 +36,8 @@
         .cloud-item { display: flex; justify-content: space-between; background: rgba(56, 189, 248, 0.1); padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--accent); margin-bottom: 4px; }
         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
         .info-item { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border-left: 3px solid #475569; }
+        .warn-text { color: var(--red) !important; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -67,23 +69,35 @@
                 </div>
             </div>
         </div>
-        <div id="map" class="mb-4"></div>
+        <div id="map"></div>
         <div class="card"><span class="label-sm">雲層 CLOUDS</span><div id="cloudBox"></div></div>
         <div class="card">
             <span class="label-sm">電碼解譯 DECODER</span>
             <div class="info-grid">
                 <div class="info-item"><span class="label-sm" style="margin:0">能見度 VIS</span><div id="visVal" style="font-weight:bold; font-size:1.1rem">--</div></div>
-                <div class="info-item"><span class="label-sm" style="margin:0">氣壓 QNH</span><div id="qnhVal" style="font-weight:bold; font-size:1.1rem">--</div></div>
+                <div class="info-item"><span class="label-sm" style="margin:0">氣壓 QNH / ALT</span><div id="qnhVal" style="font-weight:bold; font-size:1.1rem">--</div></div>
             </div>
-            <div id="rmkBox" style="margin-top:10px; font-size:0.85rem; color:var(--accent)"></div>
+            <div id="rmkBox" style="margin-top:10px; font-size:0.85rem; color:var(--accent); white-space: pre-line;"></div>
         </div>
         <button onclick="transfer()" style="width:100%; padding:18px; background:var(--accent); color:#000; border:none; border-radius:12px; font-weight:bold; cursor:pointer; margin-top:5px; margin-bottom: 20px;">傳送至計算頁面 ➔</button>
     </div>
 
     <div id="tab2" class="tab-content">
         <div class="card">
-            <select id="tab2Rwy" onchange="refreshTab2()" style="margin-bottom:10px"></select>
-            <div class="side-toggle"><button id="bL" class="active" onclick="setSide('L')">LEFT Traffic</button><button id="bR" onclick="setSide('R')">RIGHT Traffic</button></div>
+            <div style="display:flex; gap:10px; align-items: flex-end;">
+                <div style="flex:2">
+                    <span class="label-sm">選取跑道</span>
+                    <select id="tab2Rwy" onchange="refreshTab2()"></select>
+                </div>
+                <div style="flex:1">
+                    <span class="label-sm">空速 TAS (KT)</span>
+                    <input type="number" id="tasInput" class="tas-input" value="90" oninput="refreshTab2()">
+                </div>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:10px;">
+                <button id="bL" style="flex:1; padding:10px; border-radius:5px; border:none; cursor:pointer;" onclick="setSide('L')">LEFT Traffic</button>
+                <button id="bR" style="flex:1; padding:10px; border-radius:5px; border:none; cursor:pointer;" onclick="setSide('R')">RIGHT Traffic</button>
+            </div>
         </div>
         <div class="card" style="text-align:center">
             <div class="compass-wrap">
@@ -93,8 +107,8 @@
             </div>
         </div>
         <div class="calc-row">
-            <div class="card"><span class="label-sm">航線偏流 WCA (Table 2)</span><table style="width:100%; font-size: 0.95rem; border-collapse: collapse;"><tbody id="wcaList"></tbody></table></div>
-            <div class="card"><span class="label-sm">導航頻率 NAV DATA (Table 3)</span><table class="nav-table"><tbody id="navDataTable"></tbody></table></div>
+            <div class="card"><span class="label-sm">航線偏流 WCA (TAS Ref)</span><table style="width:100%; font-size: 0.95rem; border-collapse: collapse;"><tbody id="wcaList"></tbody></table></div>
+            <div class="card"><span class="label-sm">導航頻率 NAV DATA</span><table class="nav-table"><tbody id="navDataTable"></tbody></table></div>
         </div>
     </div>
 </div>
@@ -112,129 +126,171 @@ const airportDB = {
     "VHHH": { name: "香港 Hong Kong", lat: 22.3089, lon: 113.9145, rwys: { "07L": {mag:73, true:71}, "25R": {mag:253, true:251} } },
     "VMMC": { name: "澳門 Macau", lat: 22.1495, lon: 113.5915, rwys: { "16": {mag:160, true:158}, "34": {mag:340, true:338} } },
     "WSSS": { name: "新加坡 Singapore", lat: 1.3644, lon: 103.9915, rwys: { "02L": {mag:20, true:20}, "20R": {mag:200, true:200} } },
-    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": {mag:337, true:330}, "16R": {mag:157, true:150} } },
     "RKSI": { name: "首爾仁川 Incheon", lat: 37.4602, lon: 126.4407, rwys: { "15R": {mag:153, true:145}, "33L": {mag:333, true:325} } },
+    "RJTT": { name: "東京羽田 Haneda", lat: 35.5494, lon: 139.7798, rwys: { "34L": {mag:337, true:330}, "34R": {mag:337, true:330}, "16L": {mag:157, true:150}, "16R": {mag:157, true:150} } },
     "KJFK": { name: "紐約 JFK", lat: 40.6413, lon: -73.7781, rwys: { "04L": {mag:44, true:57}, "22R": {mag:224, true:237} } },
     "KLAX": { name: "洛杉磯 L.A.", lat: 33.9416, lon: -118.4085, rwys: { "24L": {mag:251, true:263}, "25R": {mag:251, true:263} } }
 };
+
 const groups = [
     { label: "🇹🇼 台灣 Taiwan", ids: ["RCTP", "RCSS", "RCKH", "RCMQ", "RCNN", "RCBS", "RCQC"] },
-    { label: "🌏 港澳/首爾 East Asia", ids: ["VHHH", "VMMC", "RKSI"] },
-    { label: "JP 日本 Japan", ids: ["RJTT"] },
-    { label: "🌴 東南亞 SE Asia", ids: ["WSSS"] },
-    { label: "USEU 歐美 US/EU", ids: ["KJFK", "KLAX"] }
+    { label: "🌏 亞太 Asia-Pacific", ids: ["VHHH", "VMMC", "WSSS", "RKSI", "RJTT"] },
+    { label: "🇺🇸 歐美 Global", ids: ["KJFK", "KLAX"] }
 ];
 
 let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
-function parseCSVLine(line) {
-    const result = []; let cur = '', inQuote = false;
-    for (let char of line) { if (char === '"') inQuote = !inQuote; else if (char === ',' && !inQuote) { result.push(cur.trim()); cur = ''; } else cur += char; }
-    result.push(cur.trim()); return result;
-}
-
-// 核心併合引擎：徹底修正匹配邏輯
-async function ingestOurAirportsData() {
-    try {
-        const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
-        const rText = await rRes.text(), nText = await nRes.text(), navMap = {};
-        nText.split('\n').slice(1).forEach(line => {
-            const c = parseCSVLine(line); if (c.length < 20) return;
-            const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'').toUpperCase();
-            if (type.includes('ILS') || type.includes('TACAN') || type.includes('DME')) {
-                if (!navMap[icao]) navMap[icao] = [];
-                navMap[icao].push({ type, ident: c[2].replace(/"/g,''), name: c[3].replace(/"/g,''), freq: c[5], chan: c[11].replace(/"/g,'') });
-            }
-        });
-        rText.split('\n').slice(1).forEach(line => {
-            const c = parseCSVLine(line); if (c.length < 13) return;
-            const icao = c[2].replace(/"/g,'').trim().toUpperCase(), rwyId = c[8].replace(/"/g,'').trim(), trueCrs = c[12].replace(/"/g,'');
-            if (icao && rwyId) {
-                if (!navDataDB[icao]) navDataDB[icao] = {};
-                const navs = navMap[icao] || [];
-                const rNum = rwyId.replace(/\D/g,''); // 05L -> 05
-                // 模糊配對邏輯：名稱或識別碼包含跑道數字且是 ILS
-                const ils = navs.find(n => n.type.includes('ILS') && (n.name.includes(rNum) || n.ident.includes(rNum)));
-                const tacan = navs.find(n => (n.type.includes('TACAN') || n.type.includes('DME')) && n.chan !== "");
-                let fVal = "N/A"; if(ils) { let f = parseFloat(ils.freq); fVal = (f > 1000) ? (f/1000).toFixed(2) : f.toFixed(2); }
-                navDataDB[icao][rwyId] = { ident: ils ? ils.ident : "N/A", ils: fVal, crs: trueCrs || rwyId+"0", tacan: tacan ? tacan.chan : "N/A" };
-            }
-        });
-        console.log("併合完成！", navDataDB);
-        document.getElementById('rawView').innerText = "導航庫已就緒。";
-    } catch (e) { console.error("CSV Error"); }
-}
+// 輔助解碼邏輯
+const decodeMetarLogic = (raw) => {
+    const tokens = raw.split(' ');
+    const has = (code) => tokens.some(t => t.includes(code));
+    let d = [];
+    if(has("NOSIG")) d.push("• NOSIG (未來兩小時天氣無顯著變化)");
+    if(has("CAVOK")) d.push("• CAVOK (能見度10km+ 且 5000ft以下無雲)");
+    if(has("TSRA")) d.push("• TSRA (雷雨伴隨降雨)");
+    else if(has("TS")) d.push("• TS (有雷暴)");
+    if(has("WS")) d.push("• WS (報名有風切 Wind Shear)");
+    if(has("FG")) d.push("• FG (強霧 Visibility < 1km)");
+    if(has("BR")) d.push("• BR (薄霧 Visibility 1-5km)");
+    if(has("RA")) d.push("• RA (有雨)");
+    if(has("DZ")) d.push("• DZ (毛毛雨)");
+    if(has("SH")) d.push("• SH (陣雨)");
+    if(has("HZ")) d.push("• HZ (霾)");
+    return d.length > 0 ? d.join('\n') : "無特殊天氣現象";
+};
 
 async function update() {
     const id = document.getElementById('icaoInput').value.toUpperCase(); if (!id) return;
     const ap = airportDB[id] || { name: id, lat: 25.07, lon: 121.23, rwys: {} };
     document.getElementById('rawView').innerText = `Fetching ${id} METAR...`;
+    
     try {
         const response = await fetch(`https://metar.vatsim.net/metar.php?id=${id}&t=${Date.now()}`);
         const raw = await response.text(); if(!raw || raw.trim().length === 0) throw new Error("No Data");
         document.getElementById('rawView').innerText = raw.trim();
-        const wMatch = raw.match(/(\d{3})(\d{2,3})KT/);
-        const dir = wMatch ? parseInt(wMatch[1]) : 0, spd = wMatch ? parseInt(wMatch[2]) : 0;
+
+        // 1. 風向風速解析 (VRB/靜風)
+        const wMatch = raw.match(/(VRB|\d{3})(\d{2,3})KT/);
+        let dir = 0, spd = 0, isVrb = false;
+        if (wMatch) {
+            isVrb = wMatch[1] === "VRB";
+            dir = isVrb ? 0 : parseInt(wMatch[1]);
+            spd = parseInt(wMatch[2]);
+        }
+
+        // 2. 氣壓單位兼容 (QNH vs Altimeter)
+        const qnhMatch = raw.match(/Q(\d{4})/);
+        const altMatch = raw.match(/A(\d{4})/);
+        let qnhStr = "--";
+        if (qnhMatch) qnhStr = qnhMatch[1] + " hPa";
+        else if (altMatch) qnhStr = (parseInt(altMatch[1])/100).toFixed(2) + " inHg";
+        document.getElementById('qnhVal').innerText = qnhStr;
+
+        // 3. 能見度與雲層
         const visMatch = raw.match(/\b\d{4}\b/);
         document.getElementById('visVal').innerText = visMatch ? (visMatch[0] === "9999" ? "10km+" : visMatch[0]+"m") : "N/A";
-        const qnhMatch = raw.match(/Q(\d{4})/);
-        document.getElementById('qnhVal').innerText = qnhMatch ? qnhMatch[1]+" hPa" : "N/A";
         const cloudRegex = /(FEW|SCT|BKN|OVC)(\d{3})/g;
-        let cMatch, cloudsHtml = ""; while ((cMatch = cloudRegex.exec(raw)) !== null) { cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`; }
+        let cMatch, cloudsHtml = ""; 
+        while ((cMatch = cloudRegex.exec(raw)) !== null) { 
+            cloudsHtml += `<div class="cloud-item"><span><b>${cMatch[1]}</b></span><span>${parseInt(cMatch[2])*100} ft</span></div>`; 
+        }
         document.getElementById('cloudBox').innerHTML = cloudsHtml || "Sky Clear / NSC";
 
-        // --- 完全還原教官原版 Decoder (包含詳細中文翻譯) ---
-        let dText = "";
-        dText += raw.includes("NOSIG") ? "NOSIG (未來兩小時天氣無顯著變化)\n" : "";
-        dText += raw.includes("BECMG") ? "BECMG (逐漸轉變中)\n" : "";
-        dText += raw.includes("TEMPO") ? "TEMPO (短暫天氣波動)\n" : "";
-        dText += raw.includes("CAVOK") ? "CAVOK (能見度10km+ 且 5000ft以下無雲)\n" : "";
-        dText += raw.includes("NSC") ? "NSC (無顯著雲層)\n" : "";
-        dText += raw.includes("SKC") ? "SKC (天空無雲)\n" : "";
-        dText += raw.includes("RMK") ? "RMK (備註開始)\n" : "";
-        dText += raw.includes("WS") ? "WS (有風切 Wind Shear)\n" : "";
-        dText += raw.includes("VC") ? "VC (機場周邊 Vicinity)\n" : "";
-        dText += raw.includes("NSW") ? "NSW (無顯著天氣現象)\n" : "";
-        dText += raw.includes("-RA") ? "-RA (小雨 Light Rain)\n" : raw.includes("+RA") ? "+RA (大雨 Heavy Rain)\n" : raw.includes("RA") ? "RA (下雨 Rain)\n" : "";
-        dText += raw.includes("-DZ") ? "-DZ (小毛毛雨 Light Drizzle)\n" : raw.includes("+DZ") ? "+DZ (大毛毛雨 Heavy Drizzle)\n" : raw.includes("DZ") ? "DZ (毛毛雨 Drizzle)\n" : "";
-        dText += raw.includes("TSRA") ? "TSRA (雷雨伴隨降雨 Thunderstorm w/ Rain)\n" : raw.includes("TS") ? "TS (雷雨 Thunderstorm)\n" : "";
-        dText += raw.includes("-SH") ? "-SH (小陣雨 Light Showers)\n" : raw.includes("+SH") ? "+SH (強陣雨 Heavy Showers)\n" : raw.includes("SH") ? "SH (陣雨 Showers)\n" : "";
-        dText += raw.includes("SN") ? "SN (雪)\n" : "";
-        dText += raw.includes("FG") ? "FG (霧)\n" : "";
-        dText += raw.includes("BR") ? "BR (薄霧)\n" : "";
-        dText += raw.includes("HZ") ? "HZ (霾)\n" : "";
-        dText += raw.includes("FZ") ? "FZ (凍結性質 Freezing)\n" : "";
-        dText += raw.includes("BC") ? "BC (散片狀 Patches)\n" : "";
-        document.getElementById('rmkBox').innerText = dText || "無特殊天氣現象";
+        // 4. 解碼顯示
+        document.getElementById('rmkBox').innerText = decodeMetarLogic(raw);
 
+        // 5. 跑道判定
         let best = "--", minD = 180;
-        for(let r in ap.rwys) { let diff = Math.abs(dir - ap.rwys[r].mag); if(diff > 180) diff = 360 - diff; if(diff < minD) { minD = diff; best = r; } }
+        for(let r in ap.rwys) { 
+            let diff = Math.abs(dir - ap.rwys[r].mag); 
+            if(diff > 180) diff = 360 - diff; 
+            if(diff < minD) { minD = diff; best = r; } 
+        }
+        
         const rad = (minD * Math.PI) / 180;
-        currentData = { id, dir, spd, best, hw: Math.round(spd*Math.cos(rad)), cw: Math.round(spd*Math.sin(rad)) };
-        document.getElementById('estRwy').innerText = best;
-        document.getElementById('hWind').innerText = currentData.hw;
-        document.getElementById('cWind').innerText = currentData.cw;
+        const hw = Math.round(spd * Math.cos(rad));
+        const cw = Math.round(spd * Math.sin(rad));
+        currentData = { id, dir, spd, best, hw, cw, isVrb };
+        
+        document.getElementById('estRwy').innerText = isVrb ? "VRB" : best;
+        document.getElementById('hWind').innerText = hw;
+        const cwEl = document.getElementById('cWind');
+        cwEl.innerText = cw;
+        cwEl.className = cw > 15 ? "warn-text" : "";
+
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         if(best !== "--") drawMapPattern(id, best);
     } catch (e) { document.getElementById('rawView').innerText = `連線異常: ${e.message}`; }
 }
 
-function manualUpdate() { update(); }
+function refreshTab2() {
+    if(!currentData) return; 
+    const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id];
+    const tas = parseInt(document.getElementById('tasInput').value) || 90;
+    const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
+    
+    const rot = magH - 90; document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+    const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
+    n1.innerText = r; n2.innerText = (parseInt(r) > 18 ? parseInt(r)-18 : parseInt(r)+18).toString().padStart(2,'0');
+    
+    document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
+    
+    const legs = [
+        {n:"Upwind", t:magH},
+        {n:"Cross", t:(magH + (trafficSide==='L'?-90:90) + 360)%360},
+        {n:"Downwind", t:(magH+180)%360},
+        {n:"Base", t:(magH + (trafficSide==='L'?90:-90) + 360)%360}
+    ];
 
-function init() {
-    ingestOurAirportsData();
-    const sel = document.getElementById('apSelect');
-    groups.forEach(g => {
-        let grp = document.createElement('optgroup'); grp.label = g.label;
-        g.ids.forEach(id => grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id)));
-        sel.appendChild(grp);
-    });
-    sel.value = "RCSS"; document.getElementById('icaoInput').value = "RCSS";
-    map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    marker = L.marker([25.0697, 121.5525]).addTo(map);
-    patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
-    drawCompassUI(); update();
+    let h = ""; 
+    legs.forEach(l => {
+        const a = (currentData.dir - l.t) * Math.PI / 180;
+        let wca = Math.round(Math.asin((currentData.spd * Math.sin(a)) / tas) * 180 / Math.PI);
+        if(isNaN(wca)) wca = 0; 
+        h += `<tr><td style="padding:12px 8px">${l.n}</td><td align="center">${Math.round(l.t)}°</td><td align="center" style="color:var(--red)">${wca>0?'+':''}${wca}°</td><td align="right"><b>${((l.t+wca+360)%360).toString().padStart(3,'0')}°</b></td></tr>`;
+    }); 
+    document.getElementById('wcaList').innerHTML = h;
+
+    const navTable = document.getElementById('navDataTable');
+    const nav = (navDataDB[currentData.id] && navDataDB[currentData.id][r]) ? navDataDB[currentData.id][r] : null;
+    if(nav) { navTable.innerHTML = `<tr><td>Ident</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>ILS Freq</td><td align="right" class="val">${nav.ils} MHz</td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>`; }
+    else { navTable.innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`; }
+    if(ap && ap.rwys[r]) drawMapPattern(currentData.id, r);
+}
+
+function manualUpdate() { update(); }
+function transfer() {
+    if(!currentData) return; const s = document.getElementById('tab2Rwy'); s.innerHTML = "";
+    const ap = airportDB[currentData.id];
+    if(ap && ap.rwys) { for(let r in ap.rwys) { let o = new Option("RWY " + r, r); if(r === currentData.best) o.selected = true; s.add(o); } }
+    refreshTab2(); switchTab(2);
+}
+function setSide(s) { trafficSide = s; document.getElementById('bL').style.background = s === 'L' ? 'var(--accent)' : '#334155'; document.getElementById('bR').style.background = s === 'R' ? 'var(--accent)' : '#334155'; refreshTab2(); }
+function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
+
+async function ingestOurAirportsData() {
+    try {
+        const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
+        const rText = await rRes.text(), nText = await nRes.text(), navMap = {};
+        nText.split('\n').slice(1).forEach(line => {
+            const c = line.split(','); if (c.length < 20) return;
+            const type = c[4].replace(/"/g,''), icao = c[19].trim().replace(/"/g,'').toUpperCase();
+            if (type.includes('ILS')) {
+                if (!navMap[icao]) navMap[icao] = [];
+                navMap[icao].push({ ident: c[2].replace(/"/g,''), freq: c[5] });
+            }
+        });
+        rText.split('\n').slice(1).forEach(line => {
+            const c = line.split(','); if (c.length < 13) return;
+            const icao = c[2].replace(/"/g,'').trim().toUpperCase(), rwyId = c[8].replace(/"/g,'').trim();
+            if (icao && rwyId) {
+                if (!navDataDB[icao]) navDataDB[icao] = {};
+                const ils = (navMap[icao] || []).find(n => n.ident.includes(rwyId.replace(/\D/g,'')));
+                navDataDB[icao][rwyId] = { ident: ils?ils.ident:"N/A", ils: ils?parseFloat(ils.freq).toFixed(2):"N/A", crs: rwyId+"0" };
+            }
+        });
+        document.getElementById('rawView').innerText = "導航數據庫已就緒。";
+    } catch (e) { document.getElementById('rawView').innerText = "導航庫讀取失敗 (本地測試請忽略)"; }
 }
 
 function drawMapPattern(id, rwy) {
@@ -257,36 +313,23 @@ function drawCompassUI() {
     } svg.innerHTML = h;
 }
 
-function transfer() {
-    if(!currentData) return; const s = document.getElementById('tab2Rwy'); s.innerHTML = "";
-    const ap = airportDB[currentData.id];
-    if(ap && ap.rwys) { for(let r in ap.rwys) { let o = new Option("RWY " + r, r); if(r === currentData.best) o.selected = true; s.add(o); } }
-    else { s.add(new Option("RWY " + currentData.best, currentData.best)); }
-    refreshTab2(); switchTab(2);
+function init() {
+    ingestOurAirportsData();
+    const sel = document.getElementById('apSelect');
+    groups.forEach(g => {
+        let grp = document.createElement('optgroup'); grp.label = g.label;
+        g.ids.forEach(id => {
+            if(airportDB[id]) grp.appendChild(new Option(`${id} - ${airportDB[id].name}`, id));
+        });
+        sel.appendChild(grp);
+    });
+    sel.value = "RCSS"; document.getElementById('icaoInput').value = "RCSS";
+    map = L.map('map', { zoomControl: false }).setView([25.0697, 121.5525], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    marker = L.marker([25.0697, 121.5525]).addTo(map);
+    patternOverlay = L.polyline([], { color: '#38bdf8', weight: 3, dashArray: '10, 10' }).addTo(map);
+    drawCompassUI(); setSide('L'); update();
 }
-
-function refreshTab2() {
-    if(!currentData) return; const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id];
-    const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
-    const rot = magH - 90; document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
-    const n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
-    n1.innerText = r; n2.innerText = (parseInt(r) > 18 ? parseInt(r)-18 : parseInt(r)+18).toString().padStart(2,'0');
-    n1.style.transform = `rotate(${-rot}deg)`; n2.style.transform = `rotate(${-rot}deg)`;
-    document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
-    const legs = [{n:"Upwind",t:magH},{n:"Cross",t:(magH+270*(trafficSide==='L'?-1:1)+360)%360},{n:"Downwind",t:(magH+180)%360},{n:"Base",t:(magH+90*(trafficSide==='L'?-1:1)+360)%360}];
-    let h = ""; legs.forEach(l => {
-        const a = (currentData.dir - l.t) * Math.PI / 180, wca = Math.round(Math.asin((currentData.spd * Math.sin(a)) / 90) * 180 / Math.PI);
-        h += `<tr style="border-bottom:1px solid #334151"><td style="padding:12px 8px">${l.n}</td><td align="center">${Math.round(l.t)}°</td><td align="center" style="color:var(--red)">${wca>0?'+':''}${wca}°</td><td align="right"><b>${((l.t+wca+360)%360).toString().padStart(3,'0')}°</b></td></tr>`;
-    }); document.getElementById('wcaList').innerHTML = h;
-    const navTable = document.getElementById('navDataTable');
-    const nav = (navDataDB[currentData.id] && navDataDB[currentData.id][r]) ? navDataDB[currentData.id][r] : null;
-    if(nav) { navTable.innerHTML = `<tr><td>Ident</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>ILS Freq</td><td align="right" class="val">${nav.ils} MHz</td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr><tr><td>TACAN</td><td align="right" class="val">${nav.tacan}</td></tr>`; }
-    else { navTable.innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`; }
-    if(ap && ap.rwys[r]) drawMapPattern(currentData.id, r);
-}
-
-function setSide(s) { trafficSide = s; document.getElementById('bL').className = s === 'L' ? 'active' : ''; document.getElementById('bR').className = s === 'R' ? 'active' : ''; refreshTab2(); }
-function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
 window.onload = init;
 </script>
 </body>
