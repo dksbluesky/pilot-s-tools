@@ -250,6 +250,7 @@ function refreshTab2() {
     } else {
         document.getElementById('navDataTable').innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
     }
+    drawMapPattern(currentData.id, r);
 }
 
 function transfer() {
