@@ -250,7 +250,7 @@ function refreshTab2() {
     } else {
         document.getElementById('navDataTable').innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
     }
-    drawMapPattern(currentData.id, r);
+    drawMapPattern(currentData.id, r || currentData.best);
 }
 
 function transfer() {
@@ -259,7 +259,7 @@ function transfer() {
     refreshTab2(); switchTab(2);
 }
 function setSide(s) { trafficSide = s; document.getElementById('bL').style.background = s === 'L' ? 'var(--accent)' : '#334155'; document.getElementById('bR').style.background = s === 'R' ? 'var(--accent)' : '#334155'; refreshTab2(); }
-function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => map.invalidateSize(), 300); }
+function switchTab(n) { document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active')); document.getElementById('tab' + n).classList.add('active'); document.querySelectorAll('.tab-btn')[n-1].classList.add('active'); if(n === 1) setTimeout(() => { map.invalidateSize(); if(currentData) { const r = document.getElementById('tab2Rwy').value || currentData.best; if(r) drawMapPattern(currentData.id, r); } }, 300); }
 function manualUpdate() { update(); }
 
 function drawMapPattern(id, rwy) {
