@@ -103,7 +103,7 @@ const airportDB = {
     "RCSS": { name: "松山 Songshan", lat: 25.0697, lon: 121.5525, rwys: { "10": {mag:100, true:93.5}, "28": {mag:280, true:273.5} } },
     "RCKH": { name: "高雄 Kaohsiung", lat: 22.5771, lon: 120.3500, rwys: { "09": {mag:87, true:84.2}, "27": {mag:267, true:264.2} } },
     "RCMQ": { name: "台中 Taichung", lat: 24.2582, lon: 120.6203, rwys: { "18": {mag:180, true:175}, "36": {mag:360, true:355} } },
-    "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18R": {mag:180, true:176.5}, "36L": {mag:360, true:356.5} } },
+    "RCNN": { name: "台南 Tainan", lat: 22.9507, lon: 120.2058, rwys: { "18L": {mag:183, true:180}, "18R": {mag:180, true:176.5}, "36L": {mag:360, true:356.5}, "36R": {mag:3, true:0} } },
     "RCBS": { name: "金門 Kinmen", lat: 24.4297, lon: 118.3586, rwys: { "06": {mag:60, true:55}, "24": {mag:240, true:235} } },
     "RCQC": { name: "澎湖 Penghu", lat: 23.5681, lon: 119.6281, rwys: { "02": {mag:20, true:16.5}, "20": {mag:200, true:196.5} } },
     "VHHH": { name: "香港 Hong Kong", lat: 22.3089, lon: 113.9145, rwys: { "07L": {mag:73, true:71}, "25R": {mag:253, true:251} } },
@@ -221,6 +221,11 @@ function update() {
         currentData = { id, dir, spd, best };
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         if(best !== "--") drawMapPattern(id, best);
+    }).catch(() => {
+        document.getElementById('rawView').innerText = "連線失敗。";
+        const rwys = ap.rwys || {};
+        currentData = { id, dir: 0, spd: 0, best: Object.keys(rwys)[0] || "--" };
+        map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
     });
 }
 
@@ -231,7 +236,9 @@ function refreshTab2() {
     const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
     
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${magH-90}deg)`;
-    document.getElementById('n1').innerText = r; document.getElementById('n2').innerText = (parseInt(r)>18?parseInt(r)-18:parseInt(r)+18).toString().padStart(2,'0');
+    const rNum = parseInt(r), rSfx = r.endsWith('L') ? 'R' : r.endsWith('R') ? 'L' : '';
+    document.getElementById('n1').innerText = r;
+    document.getElementById('n2').innerText = (rNum > 18 ? rNum - 18 : rNum + 18).toString().padStart(2,'0') + rSfx;
     document.getElementById('windPtr').style.transform = `translate(-50%, -50%) rotate(${currentData.dir}deg)`;
     
     const legs = [{n:"Upwind", t:magH}, {n:"Cross", t:(magH+(trafficSide==='L'?-90:90)+360)%360}, {n:"Downwind", t:(magH+180)%360}, {n:"Base", t:(magH+(trafficSide==='L'?90:-90)+360)%360}];
