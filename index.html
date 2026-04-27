@@ -121,7 +121,7 @@ const groups = [
     { label: "🇺🇸 歐美 Global", ids: ["KJFK", "KLAX"] }
 ];
 
-let navDataDB = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
+let navDataDB = {}, csvVorCache = {}, currentData = null, trafficSide = 'L', map, marker, patternOverlay;
 
 // 1. 強化型 MHz 轉 TACAN Channel
 function mhzToTacan(mhz) {
@@ -147,41 +147,52 @@ const decodeMetarLogic = (raw) => {
 // 3. 數據庫索引修正與讀取
 async function ingestOurAirportsData() {
     try {
-        const [rRes, nRes] = await Promise.all([fetch('runways.csv'), fetch('navaids.csv')]);
+        const [rRes, nRes, dbRes] = await Promise.all([
+            fetch('runways.csv'), fetch('navaids.csv'),
+            fetch('database.json').catch(() => ({ ok: false }))
+        ]);
         const rText = await rRes.text(), nText = await nRes.text();
-        const navMap = {}; 
 
-        // 讀取 Navaids - associated_airport 索引鎖定 19
+        // Load ILS data from database.json
+        const ilsDB = {};
+        if (dbRes.ok) {
+            const dbData = await dbRes.json();
+            dbData.forEach(apt => { if (apt.ils_data) ilsDB[apt.code.toUpperCase()] = apt.ils_data; });
+        }
+
+        // Read Navaids
+        const navMap = {};
         nText.split('\n').slice(1).forEach(line => {
             const c = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (c.length < 20) return;
             const ident = c[2].replace(/"/g,''), type = c[4], freqRaw = parseFloat(c[5]), icao = c[19].toUpperCase().replace(/"/g,'').trim();
             const freq = (freqRaw > 500) ? (freqRaw / 1000).toFixed(2) : freqRaw.toFixed(2);
             if (!navMap[icao]) navMap[icao] = [];
-            navMap[icao].push({ ident, type, freq, name: c[3] });
+            navMap[icao].push({ ident, type, freq });
         });
 
-        // 讀取 Runways - le_heading=12, he_heading=18
+        // Best VOR per airport: VORTAC > VOR > TACAN
+        const typeRank = t => t.includes('VORTAC') ? 3 : t.includes('VOR') ? 2 : 1;
+        Object.keys(navMap).forEach(icao => {
+            const vors = navMap[icao].filter(n => ['TACAN','VOR','VORTAC'].some(t => n.type.includes(t)));
+            if (vors.length > 0) csvVorCache[icao] = vors.reduce((b, n) => typeRank(n.type) > typeRank(b.type) ? n : b);
+        });
+
+        // Read Runways
         rText.split('\n').slice(1).forEach(line => {
             const c = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (c.length < 19) return;
             const icao = c[2].replace(/"/g,'').toUpperCase().trim();
             if (!navDataDB[icao]) navDataDB[icao] = {};
-
-            [ {id: c[8], hdg: c[12]}, {id: c[14], hdg: c[18]} ].forEach(end => {
+            [{id: c[8], hdg: c[12]}, {id: c[14], hdg: c[18]}].forEach(end => {
                 const rId = end.id.replace(/"/g,'').trim(); if (!rId) return;
-                const airportNavs = navMap[icao] || [];
-                let matched = airportNavs.find(n => n.type.includes('ILS') && (n.name.includes(rId) || n.ident.includes(rId.replace(/\D/g,''))));
-                if (!matched) matched = airportNavs.find(n => n.type.includes('TACAN') || n.type.includes('VOR'));
-
-                navDataDB[icao][rId] = {
-                    ident: matched ? matched.ident : "N/A",
-                    type: matched ? matched.type : "N/A",
-                    freq: matched ? matched.freq : "N/A",
-                    crs: end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))).toString().padStart(3,'0') : rId.padStart(2,'0')+"0"
-                };
+                const crs = end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))).toString().padStart(3,'0') : rId.replace(/\D/g,'').padStart(2,'0')+'0';
+                const aptIls = ilsDB[icao];
+                const ils = aptIls ? (aptIls[rId] || aptIls[rId.replace(/\D/g,'')]) : null;
+                navDataDB[icao][rId] = { ils: ils || null, crs };
             });
         });
+
         document.getElementById('rawView').innerText = "數據庫已就緒。";
     } catch (e) { document.getElementById('rawView').innerText = "加載錯誤"; }
 }
@@ -251,12 +262,16 @@ function refreshTab2() {
     }); 
     document.getElementById('wcaList').innerHTML = h;
 
-    const nav = (navDataDB[currentData.id] && navDataDB[currentData.id][r]) ? navDataDB[currentData.id][r] : null;
-    if (nav) {
-        document.getElementById('navDataTable').innerHTML = `<tr><td>Ident (${nav.type})</td><td align="right" class="val">${nav.ident}</td></tr><tr><td>Freq</td><td align="right" class="val">${nav.freq} MHz <span style="color:var(--warn)">${mhzToTacan(nav.freq)}</span></td></tr><tr><td>Course</td><td align="right" class="val">${nav.crs}°</td></tr>`;
-    } else {
-        document.getElementById('navDataTable').innerHTML = `<tr><td colspan="2" align="center" style="padding:20px; color:var(--dim)">無導航資料</td></tr>`;
-    }
+    const navEntry = navDataDB[currentData.id] && navDataDB[currentData.id][r] ? navDataDB[currentData.id][r] : null;
+    const ils = navEntry ? navEntry.ils : null;
+    const vor = csvVorCache[currentData.id];
+    const crs = navEntry ? navEntry.crs : magH.toString().padStart(3,'0');
+    let navHtml = ils
+        ? `<tr><td>ILS</td><td align="right" class="val">${ils.ident} &nbsp; ${ils.freq} MHz <span style="color:var(--warn)">${mhzToTacan(ils.freq)}</span></td></tr>`
+        : `<tr><td>ILS</td><td align="right" style="color:var(--warn)">No ILS — VOR/RNAV only</td></tr>`;
+    if (vor) navHtml += `<tr><td>${vor.type}</td><td align="right" class="val">${vor.ident} &nbsp; ${vor.freq} MHz <span style="color:var(--warn)">${mhzToTacan(vor.freq)}</span></td></tr>`;
+    navHtml += `<tr><td>Course</td><td align="right" class="val">${crs}°</td></tr>`;
+    document.getElementById('navDataTable').innerHTML = navHtml;
     drawMapPattern(currentData.id, r || currentData.best);
 }
 
