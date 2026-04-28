@@ -1,0 +1,16 @@
+{
+  "name": "Pocket METAR Pro",
+  "short_name": "PilotTools",
+  "description": "Aviation METAR viewer and flight planning calculator",
+  "icons": [
+    {
+      "src": "ILS.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#38bdf8"
+}
