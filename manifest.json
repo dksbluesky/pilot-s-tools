@@ -4,7 +4,7 @@
   "description": "Aviation METAR viewer and flight planning calculator",
   "icons": [
     {
-      "src": "ILS.jpg",
+      "src": "ILS.png",
       "sizes": "1024x1024",
       "type": "image/png"
     }
