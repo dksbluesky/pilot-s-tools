@@ -5,8 +5,8 @@
   "icons": [
     {
       "src": "ILS.jpg",
-      "sizes": "192x192",
-      "type": "image/jpeg"
+      "sizes": "1024x1024",
+      "type": "image/png"
     }
   ],
   "start_url": ".",
