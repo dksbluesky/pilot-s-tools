@@ -169,7 +169,7 @@ async function ingestOurAirportsData() {
         nText.split('\n').slice(1).forEach(line => {
             const c = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             if (c.length < 20) return;
-            const ident = c[2].replace(/"/g,''), type = c[4], freqRaw = parseFloat(c[5]), icao = c[19].toUpperCase().replace(/"/g,'').trim();
+            const ident = c[2].replace(/"/g,''), type = c[4].replace(/"/g,''), freqRaw = parseFloat(c[5]), icao = c[19].toUpperCase().replace(/"/g,'').trim();
             const freq = (freqRaw > 500) ? (freqRaw / 1000).toFixed(2) : freqRaw.toFixed(2);
             if (!navMap[icao]) navMap[icao] = [];
             navMap[icao].push({ ident, type, freq });
@@ -193,7 +193,8 @@ async function ingestOurAirportsData() {
                 const crs = end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))).toString().padStart(3,'0') : rId.replace(/\D/g,'').padStart(2,'0')+'0';
                 const aptIls = ilsDB[icao];
                 const ils = aptIls ? (aptIls[rId] || aptIls[rId.replace(/\D/g,'')]) : null;
-                navDataDB[icao][rId] = { ils: ils || null, crs };
+                const finalCrs = ils ? ils.crs.toString().padStart(3,'0') : crs;
+                navDataDB[icao][rId] = { ils: ils || null, crs: finalCrs };
             });
         });
 
