@@ -190,11 +190,11 @@ async function ingestOurAirportsData() {
             if (!navDataDB[icao]) navDataDB[icao] = {};
             [{id: c[8], hdg: c[12]}, {id: c[14], hdg: c[18]}].forEach(end => {
                 const rId = end.id.replace(/"/g,'').trim(); if (!rId) return;
-                const crs = end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))).toString().padStart(3,'0') : rId.replace(/\D/g,'').padStart(2,'0')+'0';
+                const rwyHdg = end.hdg ? Math.round(parseFloat(end.hdg.replace(/"/g,''))) : parseInt(rId.replace(/\D/g,'')) * 10;
                 const aptIls = ilsDB[icao];
                 const ils = aptIls ? (aptIls[rId] || aptIls[rId.replace(/\D/g,'')]) : null;
-                const finalCrs = ils ? ils.crs.toString().padStart(3,'0') : crs;
-                navDataDB[icao][rId] = { ils: ils || null, crs: finalCrs };
+                const finalCrs = ils ? ils.crs.toString().padStart(3,'0') : rwyHdg.toString().padStart(3,'0');
+                navDataDB[icao][rId] = { ils: ils || null, crs: finalCrs, rwyHdg };
             });
         });
 
@@ -233,7 +233,7 @@ function update() {
         document.getElementById('rmkBox').innerText = decodeMetarLogic(raw);
 
         let best = "--", minD = 180;
-        for(let r in ap.rwys) { let diff = Math.abs(dir-ap.rwys[r].mag); if(diff>180) diff=360-diff; if(diff<minD){minD=diff; best=r;} }
+        for(let r in ap.rwys) { const hdg = (navDataDB[id] && navDataDB[id][r]) ? navDataDB[id][r].rwyHdg : ap.rwys[r].mag; let diff = Math.abs(dir-hdg); if(diff>180) diff=360-diff; if(diff<minD){minD=diff; best=r;} }
         currentData = { id, dir, spd, best };
         map.setView([ap.lat, ap.lon], 14); marker.setLatLng([ap.lat, ap.lon]);
         if(best !== "--") drawMapPattern(id, best);
@@ -249,7 +249,8 @@ function refreshTab2() {
     if(!currentData) return; 
     const r = document.getElementById('tab2Rwy').value, ap = airportDB[currentData.id];
     const tas = parseInt(document.getElementById('tasInput').value) || 90;
-    const magH = (ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10;
+    const navEntry0 = navDataDB[currentData.id] && navDataDB[currentData.id][r];
+    const magH = navEntry0 ? navEntry0.rwyHdg : ((ap && ap.rwys[r]) ? ap.rwys[r].mag : parseInt(r)*10);
     
     const barRot = magH - 90;
     document.getElementById('rwyBar').style.transform = `translate(-50%, -50%) rotate(${barRot}deg)`;
