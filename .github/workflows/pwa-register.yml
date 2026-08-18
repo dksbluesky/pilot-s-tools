@@ -1,0 +1,49 @@
+name: PWA Register
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  register-service-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Register service worker
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          marker = "<script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(console.error)); }</script>"
+
+          if "navigator.serviceWorker.register('./sw.js'" not in text:
+              insert_before = '</body>'
+              if insert_before not in text:
+                  raise SystemExit('index.html has no closing body tag')
+              text = text.replace(insert_before, f'{marker}\n{insert_before}', 1)
+              path.write_text(text, encoding='utf-8')
+          else:
+              print('Service worker registration already present')
+
+      - name: Commit registration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "fix: register PWA service worker"
+          git push origin HEAD:main
