@@ -1,8 +1,8 @@
-const CACHE_NAME = 'pilot-tools-shell-v1';
+const CACHE_NAME = 'pilot-tools-shell-v2';
 const APP_SHELL = [
   './',
   './index.html',
-  './manifest.json?v=3',
+  './manifest.json?v=4',
   './icon-180.png?v=3',
   './icon-192.png?v=3',
   './icon-512.png?v=3'
