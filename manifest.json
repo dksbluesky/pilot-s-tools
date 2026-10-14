@@ -1,7 +1,7 @@
 {
-  "id": "./pilot-tools-pwa-v2",
+  "id": "./pilot-tools-pwa",
   "name": "METAR & ILS & VOR",
-  "short_name": "PilotTools-V2",
+  "short_name": "PilotTools",
   "description": "METAR、ILS、VOR 航空教學與導航工具",
   "icons": [
     {
@@ -17,7 +17,7 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./index.html?v=2",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
